@@ -3,8 +3,6 @@
 This repository provides tools to explore the influence of floodplain-channel connectivity on flood celerity and flood routing processes.  Current functionality includes
 * Extraction of reach-averaged hydraulic geometry from DEMs
 * Derivation of river reach "topographic signatures"
-* Clustering of "topographic signatures" using a Gaussian Mixture Model (GMM)
-* Generation and cleaning of geomorphon maps from DEMs
 
 ## Reach-averaging process
 
