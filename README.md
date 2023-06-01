@@ -18,12 +18,6 @@ Reach-averaged hydraulic parameters may then be extracted from the DEM within th
 
 ## Signature clustering
 
-"Topographic Signatures" are a concept that the University of Vermont is actively developing.  In simple terms, topo signatures represent the ease with which a river spills out into the adjacent terrain.  We can use ML clustering methods on a large dataset of reach topographic signatures to view emergent hydraulic properties of river reaches across various settings.
+"Topographic Signatures" are a concept that the University of Vermont is actively developing.  In simple terms, topo signatures represent the ease with which a river spills out into the adjacent terrain.  University of Vermont is currently using 1m DEM data and NHDPlus subcatchments to generate topographic signatures for ~3,000 reaches within the Lake Champlain Basin of Vermont. These topographic signatures will be used in a machine-learning analysis to explore emergent properties of floodplain-channel connectivity that influence flood routing.
 
-The example below shows a preliminary clustering of the NHDPlus Reaches within the Lake Champlain basin of Vermont.
-
-<img src="images/feature_based_means.png" alt= "signature_clusters">
-
-
-The dataset of topographic signatures is available at https://www.hydroshare.org/resource/0c21a05466944561b6513cde333a1655/
 
