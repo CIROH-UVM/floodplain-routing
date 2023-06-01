@@ -3,7 +3,7 @@ import time
 import pandas as pd
 import numpy as np
 import json
-from utilities import subunit_hydraulics, generate_geomorphons
+from utilities import subunit_hydraulics
 
 
 def topographic_signatures(reach_path, aoi_path, working_directory, id_field, fields_of_interest, scaling):
@@ -21,13 +21,11 @@ def topographic_signatures(reach_path, aoi_path, working_directory, id_field, fi
     # Load reaches/basins to run
     reaches = pd.read_csv(reach_path, dtype={'subunit': 'str', 'unit': 'str'})
     units = reaches['unit'].unique()
-    # units = ['winooski']  # temporary overrride
 
     # Process units
     for unit in units:
         reaches_in_unit = reaches.query(f'unit == "{unit}"')
         subunits = np.sort(reaches_in_unit['subunit'].unique())
-        # subunits = ['0504']  # temporary overrride
 
         # Set up data logging
         data_dict = {f: pd.DataFrame() for f in fields_of_interest}
@@ -46,9 +44,7 @@ def topographic_signatures(reach_path, aoi_path, working_directory, id_field, fi
                 print(f'No data for {subunit} found')
                 continue
             reachesin_subunit = reaches_in_unit.query(f'subunit == "{subunit}"')
-            # reachesin_subunit  = reachesin_subunit.drop_duplicates(subset=id_field)
             reachesin_subunit = reachesin_subunit.groupby(reachesin_subunit[id_field]).agg(TotDASqKm=('TotDASqKm', 'max'), Slope=('Slope', 'mean'))
-            # reach_list = reachesin_subunit[id_field].to_list()
             reach_list = reachesin_subunit.index.to_list()
             reachesin_subunit['max_stage'] = reachesin_subunit['TotDASqKm'].apply(max_stage_equation)
             stages = np.array([np.linspace(0, max_stage_equation(dasqkm), 1000) for dasqkm in reachesin_subunit['TotDASqKm'].to_list()])
@@ -67,27 +63,12 @@ def topographic_signatures(reach_path, aoi_path, working_directory, id_field, fi
         print(f'Completed processing {unit} in {round((time.perf_counter() - t1) / 60, 1)} minutes')
         print('='*50)
 
-def batch_geomorphons(working_directory):
-    run_list = ['WIN_0504', 'OTR_0203', 'WIN_0502', 'OTR_0502', 'WIN_0701', 'LKC_0502', 'WIN_0503', 'LKC_0501', 'OTR_0402', 'LKC_0401']
-    unit_dict = {'WIN': 'winooski', 'OTR': 'otter', 'LKC': 'champlain'}
-    for run in run_list:
-        print(f'Running basin {run}')
-        tstart = time.perf_counter()
-        unit = unit_dict[run[:3]]
-        subunit = run[-4:]
-        tmp_dir = os.path.join(working_directory, unit, 'subbasins', subunit, 'rasters')
-        generate_geomorphons(tmp_dir, working_directory)
-        print(f'Finished in {round((time.perf_counter() - tstart) / 60), 1} minutes')
-        print('='*25)
-        
-
 
 if __name__ == '__main__':
-    reach_path = r"C:\Users\klawson1\Documents\CIROH_Floodplains\super_data\run_3-16-23\reaches_2.csv"
-    aoi_path = r"C:\Users\klawson1\Documents\CIROH_Floodplains\super_data\run_3-16-23\reaches.shp"
+    reach_path = r"reaches.csv"
+    aoi_path = r"reaches.shp"
     id_field = 'MergedCode'
-    working_directory = r'C:\Users\klawson1\Documents\CIROH_Floodplains'
-    fields_of_interest = ['rh_prime', 'el', 'vol', 'p', 'area', 'rh', 'celerity']
+    working_directory = os.curdir()
+    fields_of_interest = ['el', 'vol', 'p', 'area', 'rh', 'celerity']
 
-    # topographic_signatures(reach_path, aoi_path, working_directory, id_field, fields_of_interest, scaling=True)
-    batch_geomorphons(working_directory)
+    topographic_signatures(reach_path, aoi_path, working_directory, id_field, fields_of_interest, scaling=True)

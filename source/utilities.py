@@ -8,8 +8,6 @@ import matplotlib.pyplot as plt
 from osgeo import gdal, ogr
 from rasterio import features
 from scipy.ndimage import gaussian_filter1d
-from grass_tools_copy import GrassSession
-from whitebox_tools import WhiteboxTools
 
 
 
@@ -286,60 +284,3 @@ def extract_celerity_signature(hand_path, aoi_path, slope_path, reaches=None, ma
             tmp_path = os.path.join(save_path, f'{r}.png')
             fig.savefig(tmp_path, dpi=300)
         plt.close(fig)
-
-def generate_geomorphons(raster_dir, working_dir):
-    # Set up workspace
-    location = 'grass_tmp'
-    mapset = 'permanent'
-    epsg = 32145
-
-    dem_path = os.path.join(raster_dir, 'DEM.tif')
-    geomorphon_path = os.path.join(raster_dir, 'geomorphon_raw.tif')
-    wrk_path = os.path.join(raster_dir, 'geomorphon_tmp.tif')
-    sieve_path = os.path.join(raster_dir, 'geomorphon_tmp_sieve.tif')
-    out_path = os.path.join(raster_dir, 'geomorphon_clean.tif')
-    
-    # Generate geomorphon
-    tstart = time.perf_counter()
-    grass_session = GrassSession(working_dir, location, mapset, epsg)
-    grass_session.geomorphon(dem_path, geomorphon_path, search=34, skip=12, flat=1, dist=0)
-    print(f' - geomorphon generated in {round(time.perf_counter() - tstart, 1)} seconds')
-    
-    # Clean geomorphon
-    tstart = time.perf_counter()
-    wbt = WhiteboxTools()
-    wbt.exe_path = r"C:\WBT"
-
-    # Reclassify
-    reclass_vals = '1;5;1;6;1;7;2;2;2;3;2;4;3;8;3;9;3;10'
-    wbt.reclass(geomorphon_path, wrk_path, reclass_vals, assign_mode=True)
-
-    # Majority filter
-    wbt.majority_filter(wrk_path, wrk_path, filterx=5, filtery=5)
-
-    # Clump
-    wbt.clump(wrk_path, sieve_path, diag=True, zero_back=False)
-
-    # Edge proportion
-    wbt.edge_proportion(sieve_path, sieve_path)
-
-    # Filter
-    reclass_vals = '-999;0.75;1.1;999;-0.1;0.75'
-    wbt.reclass(sieve_path, sieve_path, reclass_vals, assign_mode=False)
-
-    # Sieve
-    wbt.min(sieve_path, wrk_path, wrk_path)
-    os.remove(sieve_path)
-
-    # Enforce nodata
-    wbt.set_nodata_value(wrk_path, wrk_path, -999)
-
-    # Fill gaps (nibble)
-    wbt.fill_missing_data(wrk_path, wrk_path, filter=25, weight=2, no_edges=True)
-
-    # Cleanup majority filter
-    wbt.majority_filter(wrk_path, out_path, filterx=5, filtery=5)
-    os.remove(wrk_path)
-
-    print(f' - geomorphon reclassed and cleaned in {round(time.perf_counter() - tstart, 1)} seconds')
-
