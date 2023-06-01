@@ -3,7 +3,7 @@ import time
 import pandas as pd
 import numpy as np
 import json
-from utilities import subunit_hydraulics
+from utilities import subunit_hydraulics, generate_geomorphons
 
 
 def topographic_signatures(reach_path, aoi_path, working_directory, id_field, fields_of_interest, scaling):
@@ -21,13 +21,13 @@ def topographic_signatures(reach_path, aoi_path, working_directory, id_field, fi
     # Load reaches/basins to run
     reaches = pd.read_csv(reach_path, dtype={'subunit': 'str', 'unit': 'str'})
     units = reaches['unit'].unique()
-    units = ['winooski']  # temporary overrride
+    # units = ['winooski']  # temporary overrride
 
     # Process units
     for unit in units:
         reaches_in_unit = reaches.query(f'unit == "{unit}"')
         subunits = np.sort(reaches_in_unit['subunit'].unique())
-        subunits = ['0504']  # temporary overrride
+        # subunits = ['0504']  # temporary overrride
 
         # Set up data logging
         data_dict = {f: pd.DataFrame() for f in fields_of_interest}
@@ -67,6 +67,20 @@ def topographic_signatures(reach_path, aoi_path, working_directory, id_field, fi
         print(f'Completed processing {unit} in {round((time.perf_counter() - t1) / 60, 1)} minutes')
         print('='*50)
 
+def batch_geomorphons(working_directory):
+    run_list = ['WIN_0504', 'OTR_0203', 'WIN_0502', 'OTR_0502', 'WIN_0701', 'LKC_0502', 'WIN_0503', 'LKC_0501', 'OTR_0402', 'LKC_0401']
+    unit_dict = {'WIN': 'winooski', 'OTR': 'otter', 'LKC': 'champlain'}
+    for run in run_list:
+        print(f'Running basin {run}')
+        tstart = time.perf_counter()
+        unit = unit_dict[run[:3]]
+        subunit = run[-4:]
+        tmp_dir = os.path.join(working_directory, unit, 'subbasins', subunit, 'rasters')
+        generate_geomorphons(tmp_dir, working_directory)
+        print(f'Finished in {round((time.perf_counter() - tstart) / 60), 1} minutes')
+        print('='*25)
+        
+
 
 if __name__ == '__main__':
     reach_path = r"C:\Users\klawson1\Documents\CIROH_Floodplains\super_data\run_3-16-23\reaches_2.csv"
@@ -75,4 +89,5 @@ if __name__ == '__main__':
     working_directory = r'C:\Users\klawson1\Documents\CIROH_Floodplains'
     fields_of_interest = ['rh_prime', 'el', 'vol', 'p', 'area', 'rh', 'celerity']
 
-    topographic_signatures(reach_path, aoi_path, working_directory, id_field, fields_of_interest, scaling=True)
+    # topographic_signatures(reach_path, aoi_path, working_directory, id_field, fields_of_interest, scaling=True)
+    batch_geomorphons(working_directory)
