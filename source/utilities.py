@@ -70,7 +70,9 @@ def gage_areas_from_poly_gdal(shp_path, id_field, dem_filter, save_path=None, re
     # Load gage polygons and reformat
     subunits = ogr.Open(shp_path)
     subunits_layer = subunits.GetLayer()
-    if reaches is not None:
+    if len(reaches) == 1:
+        subunits_layer.SetAttributeFilter(f"{id_field} = {reaches[0]}")
+    elif len(reaches) > 1:
         subunits_layer.SetAttributeFilter(f"{id_field} in {tuple(reaches)}")
 
     # Rasterize polygons and return
