@@ -143,7 +143,7 @@ def subunit_hydraulics(hand_path, aoi_path, slope_path, stages, reach_field=None
 
     data_dict = {k: pd.DataFrame() for k in fields_of_interest}
 
-    counter = 0
+    counter = 1
     t1 = time.perf_counter()
     for r, s in zip(reaches, stages):
         print(f'{counter} / {len(reaches)}', end="\r")
