@@ -78,7 +78,7 @@ def gage_areas_from_poly_gdal(shp_path, id_field, dem_filter, save_path=None, re
     # Rasterize polygons and return
     nd_value = -9999
     if save_path:
-        target_ds = gdal.GetDriverByName('GTiff').Create(save_path, dem_filter['cols'], dem_filter['rows'], 1, gdal.GDT_Int64)
+        target_ds = gdal.GetDriverByName('GTiff').Create(save_path, dem_filter['cols'], dem_filter['rows'], 1, gdal.GDT_Int64, options=['COMPRESS=DEFLATE'])
     else:
         target_ds = gdal.GetDriverByName('MEM').Create('', dem_filter['cols'], dem_filter['rows'], 1, gdal.GDT_Int64)
 
