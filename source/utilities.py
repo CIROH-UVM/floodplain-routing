@@ -76,21 +76,22 @@ def gage_areas_from_poly_gdal(shp_path, id_field, dem_filter, save_path=None, re
         subunits_layer.SetAttributeFilter(f"{id_field} in {tuple(reaches)}")
 
     # Rasterize polygons and return
-    nd_value = -9999
-    if save_path:
-        target_ds = gdal.GetDriverByName('GTiff').Create(save_path, dem_filter['cols'], dem_filter['rows'], 1, gdal.GDT_Int64, options=['COMPRESS=DEFLATE'])
-    else:
-        target_ds = gdal.GetDriverByName('MEM').Create('', dem_filter['cols'], dem_filter['rows'], 1, gdal.GDT_Int64)
+    nd_value = 0
+    target_ds = gdal.GetDriverByName('MEM').Create('', dem_filter['cols'], dem_filter['rows'], 1, gdal.GDT_Int64)
 
     target_ds.SetGeoTransform((dem_filter['origin_x'], dem_filter['pixel_width'], 0, dem_filter['origin_y'], 0, dem_filter['pixel_height']))
     band = target_ds.GetRasterBand(1)
     target_ds.SetProjection(dem_filter['crs'])
     band.SetNoDataValue(nd_value)
 
-    options = [f"ATTRIBUTE={id_field}", "outputType=gdal.GDT_Int64"]
-
+    options = [f"ATTRIBUTE={id_field}", "outputType=gdal.GDT_Int64", f"noData={nd_value}", f"initValues={nd_value}"]
     gdal.RasterizeLayer(target_ds, [1], subunits_layer, options=options)
 
+    if save_path:
+        option = gdal.TranslateOptions(creationOptions=['COMPRESS=DEFLATE'])
+        gdal.Translate(save_path, target_ds, options=option)
+
+    # This is kind of a hacky way to crete a thiessen raster object, but it's faster than calling load_raster()
     thiessen = dem_filter.copy()
     thiessen['data'] = band.ReadAsArray()
 
