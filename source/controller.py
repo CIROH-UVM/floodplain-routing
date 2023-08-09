@@ -3,7 +3,8 @@ import time
 import pandas as pd
 import numpy as np
 import json
-from utilities import subunit_hydraulics, generate_geomorphons
+from utilities import subunit_hydraulics, generate_geomorphons, gage_areas_from_poly_gdal
+from osgeo import ogr
 
 
 def topographic_signatures(reach_path, aoi_path, working_directory, out_directory, id_field, fields_of_interest, scaling):
@@ -80,6 +81,42 @@ def batch_geomorphons(working_directory):
         generate_geomorphons(tmp_dir, working_directory)
         print(f'Finished in {round((time.perf_counter() - tstart) / 60), 1} minutes')
         print('='*25)
+
+def geomorphon_stats(reach_path, aoi_path, working_directory, out_directory, id_field):
+     # Load reaches/basins to run
+    reaches = pd.read_csv(reach_path, dtype={'subunit': 'str', 'unit': 'str'})
+    units = reaches['unit'].unique()
+
+    # Initialize logging
+    data_dict = {f: pd.DataFrame() for f in fields_of_interest}
+
+    # Process units
+    for unit in units:
+        reaches_in_unit = reaches.query(f'unit == "{unit}"')
+        subunits = np.sort(reaches_in_unit['subunit'].unique())
+
+        t1 = time.perf_counter()
+        print(f'Unit: {unit} | Subunits: {len(subunits)}')
+        counter = 1
+        for subunit in subunits:
+            print(f'subunit {counter}: {subunit}')
+            counter += 1
+            geomorphon_path = os.path.join(working_directory, unit, 'subbasins', subunit, 'rasters', 'slope.tif')
+            su_data_dict = subunit_hydraulics(hand_path, aoi_path, slope_path, stages, reach_field=id_field, reaches=reach_list, fields_of_interest=fields_of_interest)
+
+            for f in fields_of_interest:
+                data_dict[f] = pd.concat([data_dict[f], su_data_dict[f]], axis=1)
+        
+        print('\n'*3)
+        print(f'Completed processing {unit} in {round((time.perf_counter() - t1) / 60, 1)} minutes')
+        print('='*50)
+
+    print('Saving data')
+    out_directory = os.path.join(out_directory, "outputs")
+    os.makedirs(out_directory, exist_ok=True)
+    for f in fields_of_interest:
+            data_dict[f].to_csv(os.path.join(out_directory, f'{f}.csv'), index=False)
+    print('Finished saving')
         
 
 
@@ -91,5 +128,5 @@ if __name__ == '__main__':
     out_directory = r'C:\Users\klawson1\Documents\CIROH_Floodplains\runs\6-6-23'
     fields_of_interest = ['rh_prime', 'el', 'vol', 'p', 'area', 'rh', 'celerity']
 
-    topographic_signatures(reach_path, aoi_path, working_directory, out_directory, id_field, fields_of_interest, scaling=True)
+    # topographic_signatures(reach_path, aoi_path, working_directory, out_directory, id_field, fields_of_interest, scaling=True)
     # batch_geomorphons(working_directory)
