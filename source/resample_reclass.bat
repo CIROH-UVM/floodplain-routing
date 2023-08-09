@@ -1,6 +1,6 @@
 @echo OFF
 set saga_dir=C:\saga-8.5.1_x64
-set subbasin=winooski
+set subbasin=lamoille
 set fp_map_dir=C:\Users\klawson1\Documents\CIROH_Floodplains\tmp_probHAND\%subbasin%\*
 set unit_dir=C:\Users\klawson1\Documents\CIROH_Floodplains\%subbasin%
 cd %saga_dir%

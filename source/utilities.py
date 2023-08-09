@@ -88,8 +88,9 @@ def gage_areas_from_poly_gdal(shp_path, id_field, dem_filter, save_path=None, re
     gdal.RasterizeLayer(target_ds, [1], subunits_layer, options=options)
 
     if save_path:
-        option = gdal.TranslateOptions(creationOptions=['COMPRESS=DEFLATE'])
-        gdal.Translate(save_path, target_ds, options=option)
+        # option = gdal.TranslateOptions(creationOptions=['COMPRESS=DEFLATE'])
+        # gdal.Translate(save_path, target_ds, options=option)
+        gdal.Translate(save_path, target_ds)
 
     # This is kind of a hacky way to crete a thiessen raster object, but it's faster than calling load_raster()
     thiessen = dem_filter.copy()
