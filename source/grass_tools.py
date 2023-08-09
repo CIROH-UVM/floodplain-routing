@@ -43,6 +43,14 @@ class GrassSession:
         gs.run_command('r.geomorphon', elevation="DEM", forms='geomorphon', overwrite=True, search=search, skip=skip, flat=flat, dist=dist)
         gs.run_command('r.out.gdal', input='geomorphon', type='Int16', overwrite=True, output=out_path)
 
+    def multiply(self, in_path_1, in_path_2, out_path):
+        ### Output resolution will match i1 raster resolution ###
+        gs.run_command('r.in.gdal', input=in_path_1, output='i1', overwrite=True)
+        gs.run_command('r.in.gdal', input=in_path_2, output='i2', overwrite=True)
+        gs.run_command('g.region', rast='i1')
+        gs.run_command('r.mapcalc', expression="out = i1 * i2", overwrite=True)
+        gs.run_command('r.out.gdal', input='out', output=out_path, overwrite=True)
+
     def reclass(self, in_path, out_path, rules_path):
         gs.run_command('r.in.gdal', input=in_path, output='input', overwrite=True)
         gs.run_command('g.region', rast='input')
