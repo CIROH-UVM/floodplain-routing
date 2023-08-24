@@ -1,4 +1,5 @@
 ## Classifying Floodplain Types for Flood Attenuation
+[![DOI](https://zenodo.org/badge/630477245.svg)](https://zenodo.org/badge/latestdoi/630477245)
 
 This repository provides tools to explore the influence of floodplain-channel connectivity on flood celerity and flood routing processes.  Current functionality includes
 * Extraction of reach-averaged hydraulic geometry from DEMs
