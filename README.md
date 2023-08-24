@@ -19,4 +19,9 @@ Reach-averaged hydraulic parameters may then be extracted from the DEM within th
 
 "Topographic Signatures" are a concept that the University of Vermont is actively developing.  In simple terms, topo signatures represent the ease with which a river spills out into the adjacent terrain.  University of Vermont is currently using 1m DEM data and NHDPlus subcatchments to generate topographic signatures for ~3,000 reaches within the Lake Champlain Basin of Vermont. These topographic signatures will be used in a machine-learning analysis to explore emergent properties of floodplain-channel connectivity that influence flood routing.
 
+## Funding
+Funding for this project was provided by the National Oceanic & Atmospheric
+Administration (NOAA), awarded to the Cooperative Institute for Research to
+Operations in Hydrology (CIROH) through the NOAA Cooperative Agreement
+with the University of Alabama (NA22NWS4320003).
 
