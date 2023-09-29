@@ -70,7 +70,7 @@ def topographic_signatures(reach_path, aoi_path, working_directory, out_director
 
 
 def batch_geomorphons(working_directory):
-    run_list = ['WIN_0504', 'OTR_0203', 'WIN_0502', 'OTR_0502', 'WIN_0701', 'LKC_0502', 'WIN_0503', 'LKC_0501', 'OTR_0402', 'LKC_0401']
+    run_list = ['WIN_0504']
     unit_dict = {'WIN': 'winooski', 'OTR': 'otter', 'LKC': 'champlain'}
     for run in run_list:
         print(f'Running basin {run}')
@@ -121,12 +121,5 @@ def geomorphon_stats(reach_path, aoi_path, working_directory, out_directory, id_
 
 
 if __name__ == '__main__':
-    reach_path = r"C:\Users\klawson1\Documents\CIROH_Floodplains\runs\6-6-23\homework_reaches.csv"
-    aoi_path = r"C:\Users\klawson1\Documents\CIROH_Floodplains\runs\reference\reaches.shp"
-    id_field = 'MergedCode'
-    working_directory = r'C:\Users\klawson1\Documents\CIROH_Floodplains'
-    out_directory = r'C:\Users\klawson1\Documents\CIROH_Floodplains\runs\6-6-23'
-    fields_of_interest = ['rh_prime', 'el', 'vol', 'p', 'area', 'rh', 'celerity']
-
-    # topographic_signatures(reach_path, aoi_path, working_directory, out_directory, id_field, fields_of_interest, scaling=True)
-    # batch_geomorphons(working_directory)
+    working_directory = r'/netfiles/ciroh/floodplains'
+    batch_geomorphons(working_directory)
