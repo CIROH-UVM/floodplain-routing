@@ -70,7 +70,7 @@ def topographic_signatures(reach_path, aoi_path, working_directory, out_director
 
 
 def batch_geomorphons(working_directory):
-    run_list = ['WIN_0101']
+    run_list = ['WIN_0504']
     unit_dict = {'WIN': 'winooski', 'OTR': 'otter', 'LKC': 'champlain'}
     for run in run_list:
         print(f'Running basin {run}')

@@ -8,8 +8,7 @@ import matplotlib.pyplot as plt
 from osgeo import gdal, ogr
 from rasterio import features
 from scipy.ndimage import gaussian_filter1d
-from grass_tools import GrassSession
-from whitebox_tools import WhiteboxTools
+from whitebox import WhiteboxTools
 
 
 
@@ -304,16 +303,11 @@ def generate_geomorphons(raster_dir, working_dir):
     sieve_path = os.path.join(raster_dir, 'geomorphon_tmp_sieve.tif')
     out_path = os.path.join(raster_dir, 'geomorphon_clean.tif')
     
-    # Generate geomorphon
-    tstart = time.perf_counter()
-    grass_session = GrassSession(working_dir, location, mapset, epsg)
-    grass_session.geomorphon(dem_path, geomorphon_path, search=34, skip=12, flat=1, dist=0)
-    print(f' - geomorphon generated in {round(time.perf_counter() - tstart, 1)} seconds')
-    
-    # Clean geomorphon
     tstart = time.perf_counter()
     wbt = WhiteboxTools()
-    wbt.exe_path = r"C:\WBT"
+
+    # Generate geomorphon
+    wbt.geomorphons(dem_path, geomorphon_path, search=34, skip=12, threshold=1, fdist=0)
 
     # Reclassify
     reclass_vals = '1;5;1;6;1;7;2;2;2;3;2;4;3;8;3;9;3;10'
@@ -346,7 +340,7 @@ def generate_geomorphons(raster_dir, working_dir):
     wbt.majority_filter(wrk_path, wrk_path, filterx=5, filtery=5)
 
     # Clip to valley bottoms
-    grass_session.multiply(wrk_path, valley_bottom_path, out_path)
+    wbt.multiply(wrk_path, valley_bottom_path, out_path)
 
     os.remove(wrk_path)
 
