@@ -1,4 +1,6 @@
-# How to Run Python Code on the CIROH Testbeds VM
+# How to Run Python Code on the CIROH Testbed VM
+
+<em>Scott Lawson - 9/29/23</em>
 
 1. Install Visual Studio Code (https://code.visualstudio.com/download)
 2. Once it is downloaded, run the installer (VSCodeUserSetup-{version}.exe). This will only take a minute.
