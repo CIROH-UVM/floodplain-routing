@@ -94,7 +94,7 @@ def clip_flowlines(clip_path, gdb_path, db_path, out_dir):
 def run_all():
     save_path = r'/users/k/l/klawson1/netfiles/ciroh/slawson/ciroh_network'
     db_path = os.path.join(save_path, 'vaa.db')
-    clip_path = r'/users/k/l/klawson1/netfiles/ciroh/slawson/subunits.shp'
+    clip_path = os.path.join(save_path, 'subunits.shp')
     huc4 = '0430'
 
     gdb_path = download_data(save_path, huc4)
