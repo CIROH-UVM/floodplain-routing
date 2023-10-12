@@ -108,10 +108,10 @@ def reach_hydraulics(r, thiessens, elevations, slope, el_nd, resolution, bins):
     
     wrk_df = pd.DataFrame({'el': tmp_elevations, 'p': projected_area})
     wrk_df['bins'] = pd.cut(wrk_df['el'], bins=bins, labels=bins[:-1], include_lowest=True)  # Binning a la semivariogram
-    wrk_df = wrk_df.groupby(wrk_df['bins']).agg(el=('el', 'mean'),
+    wrk_df = wrk_df.groupby(wrk_df['bins'], observed=False).agg(el=('el', 'mean'),
                                                 count=('el', 'count'),
                                                 p=('p', 'sum'))
-    wrk_df['el'] = wrk_df['el'].fillna(wrk_df.index.to_series().astype('float'))
+    wrk_df['el'] = wrk_df['el'].interpolate()
     
     wrk_df['area'] = wrk_df['count'].cumsum()
     wrk_df['area'] -= (wrk_df['count'] * 0.5)  # Center
