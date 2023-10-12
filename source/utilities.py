@@ -138,7 +138,7 @@ def subunit_hydraulics(hand_path, aoi_path, slope_path, stages, reach_field=None
     if aoi_path[-3:] == 'tif':
         thiessens = load_raster(aoi_path)
     elif aoi_path[-3:] == 'shp':
-        thiessens = gage_areas_from_poly_gdal(aoi_path, reach_field, elevations, reaches=reaches, save_path=r'C:\Users\klawson1\Documents\CIROH_Floodplains\winooski\subbasins\0504\rasters\gage_areas.tif')
+        thiessens = gage_areas_from_poly_gdal(aoi_path, reach_field, elevations, reaches=reaches)
 
     resolution = elevations['pixel_width'] * elevations['pixel_height']
 
