@@ -1,37 +1,34 @@
 import os
 import time
 import pandas as pd
+import geopandas as gpd
 import numpy as np
 import json
 from utilities import subunit_hydraulics, generate_geomorphons, gage_areas_from_poly_gdal
 from osgeo import ogr
 
 
-def topographic_signatures(reach_path, aoi_path, working_directory, out_directory, id_field, fields_of_interest, scaling):
+def topographic_signatures(run_dict):
     # Set up run
-    if scaling:
+    if run_dict['scaled_stages']:
         max_stage_equation = lambda da: 5 * (0.26 * (da ** 0.287))
     else:
         max_stage_equation = lambda da: 10
-    run_metadata = {'reach_path': reach_path, 
-                    'aoi_path': aoi_path, 
-                    'id_field': id_field, 
-                    'fields_of_interest': fields_of_interest, 
-                    'scaled_stages': scaling}
-    with open(os.path.join(out_directory, 'run_metadata.json'), 'w') as f:
-            json.dump(run_metadata, f)
+
+    with open(os.path.join(run_dict['out_directory'], 'run_metadata.json'), 'w') as f:
+        json.dump(run_dict, f)
 
     # Load reaches/basins to run
-    reaches = pd.read_csv(reach_path, dtype={'subunit': 'str', 'unit': 'str'})
-    units = reaches['unit'].unique()
+    reaches = gpd.read_file(run_dict['reach_path'], ignore_geometry=True)
+    units = reaches[run_dict['unit_field']].unique()
 
     # Initialize logging
-    data_dict = {f: pd.DataFrame() for f in fields_of_interest}
+    data_dict = {f: pd.DataFrame() for f in run_dict['fields_of_interest']}
 
     # Process units
     for unit in units:
-        reaches_in_unit = reaches.query(f'unit == "{unit}"')
-        subunits = np.sort(reaches_in_unit['subunit'].unique())
+        reaches_in_unit = reaches[reaches[run_dict["unit_field"]] == unit]
+        subunits = np.sort(reaches_in_unit[run_dict['subunit_field']].unique())
 
         t1 = time.perf_counter()
         print(f'Unit: {unit} | Subunits: {len(subunits)}')
@@ -39,22 +36,21 @@ def topographic_signatures(reach_path, aoi_path, working_directory, out_director
         for subunit in subunits:
             print(f'subunit {counter}: {subunit}')
             counter += 1
-            hand_path = os.path.join(working_directory, unit, 'subbasins', subunit, 'rasters', 'HAND.tif')
-            slope_path = os.path.join(working_directory, unit, 'subbasins', subunit, 'rasters', 'slope.tif')
+            hand_path = os.path.join(run_dict['data_directory'], unit, 'subbasins', subunit, 'rasters', 'HAND.tif')
+            slope_path = os.path.join(run_dict['data_directory'], unit, 'subbasins', subunit, 'rasters', 'slope.tif')
             if not (os.path.exists(hand_path) and os.path.exists(slope_path)):
                 print(f'No data for {subunit} found')
                 continue
-            reachesin_subunit = reaches_in_unit.query(f'subunit == "{subunit}"')
-            # reachesin_subunit  = reachesin_subunit.drop_duplicates(subset=id_field)
-            reachesin_subunit = reachesin_subunit.groupby(reachesin_subunit[id_field]).agg(TotDASqKm=('TotDASqKm', 'max'), Slope=('Slope', 'mean'))
-            # reach_list = reachesin_subunit[id_field].to_list()
+
+            reachesin_subunit = reaches_in_unit[reaches_in_unit[run_dict["subunit_field"]] == subunit]
+            reachesin_subunit = reachesin_subunit.groupby(reachesin_subunit[run_dict['id_field']]).agg(TotDASqKm=('TotDASqKm', 'max'))
             reach_list = reachesin_subunit.index.to_list()
             reachesin_subunit['max_stage'] = reachesin_subunit['TotDASqKm'].apply(max_stage_equation)
             stages = np.array([np.linspace(0, max_stage_equation(dasqkm), 1000) for dasqkm in reachesin_subunit['TotDASqKm'].to_list()])
 
-            su_data_dict = subunit_hydraulics(hand_path, aoi_path, slope_path, stages, reach_field=id_field, reaches=reach_list, fields_of_interest=fields_of_interest)
+            su_data_dict = subunit_hydraulics(hand_path, run_dict['reach_path'], slope_path, stages, reach_field=run_dict['id_field'], reaches=reach_list, fields_of_interest=run_dict['fields_of_interest'])
 
-            for f in fields_of_interest:
+            for f in run_dict['fields_of_interest']:
                 data_dict[f] = pd.concat([data_dict[f], su_data_dict[f]], axis=1)
         
         print('\n'*3)
@@ -62,10 +58,10 @@ def topographic_signatures(reach_path, aoi_path, working_directory, out_director
         print('='*50)
 
     print('Saving data')
-    out_directory = os.path.join(out_directory, "outputs")
-    os.makedirs(out_directory, exist_ok=True)
-    for f in fields_of_interest:
-            data_dict[f].to_csv(os.path.join(out_directory, f'{f}.csv'), index=False)
+    run_dict['out_directory'] = os.path.join(run_dict['out_directory'], "outputs")
+    os.makedirs(run_dict['out_directory'], exist_ok=True)
+    for f in run_dict['fields_of_interest']:
+        data_dict[f].to_csv(os.path.join(run_dict['out_directory'], f'{f}.csv'), index=False)
     print('Finished saving')
 
 
@@ -121,5 +117,13 @@ def geomorphon_stats(reach_path, aoi_path, working_directory, out_directory, id_
 
 
 if __name__ == '__main__':
-    working_directory = r'/netfiles/ciroh/floodplains'
-    batch_geomorphons(working_directory)
+    base_directory = r'/netfiles/ciroh/floodplainsData'
+    run_metadata = {'data_directory': base_directory,
+                    'out_directory': os.path.join(base_directory, 'runs', '1'), 
+                    'reach_path': os.path.join(base_directory, 'runs', '1', 'catchments.shp'), 
+                    'id_field': 'MergeCode', 
+                    'unit_field': '8_name',
+                    'subunit_field': '12_code',
+                    'fields_of_interest': ['area', 'el', 'p', 'rh', 'rh_prime', 'vol'], 
+                    'scaled_stages': True}
+    topographic_signatures(run_metadata)
