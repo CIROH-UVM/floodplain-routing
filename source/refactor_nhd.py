@@ -51,8 +51,8 @@ def merge_reaches(gdb_path, out_path):
     conn.commit()
 
     c.execute('DROP TABLE IF EXISTS reach_data')
-    c.execute('CREATE TABLE reach_data (ReachCode REAL, max_el REAL, min_el REAL, length REAL, slope REAL GENERATED ALWAYS AS ((max_el-min_el)/(length*100)))')
-    c.execute('INSERT INTO reach_data (ReachCode, min_el, max_el, length) SELECT reachcode, min(minelevsmo), max(maxelevsmo), sum(slopelenkm)*1000 FROM nhdplusflowlinevaa GROUP BY reachcode')
+    c.execute('CREATE TABLE reach_data (ReachCode REAL, TotDASqKm REAL, max_el REAL, min_el REAL, length REAL, slope REAL GENERATED ALWAYS AS ((max_el-min_el)/(length*100)))')
+    c.execute('INSERT INTO reach_data (ReachCode, TotDASqKm, min_el, max_el, length) SELECT reachcode, max(TotDASqKm), min(minelevsmo), max(maxelevsmo), sum(slopelenkm)*1000 FROM nhdplusflowlinevaa GROUP BY reachcode')
     conn.commit()
 
 
@@ -61,6 +61,7 @@ def clip_flowlines(clip_path, gdb_path, db_path, out_dir):
     print('Loading Merged VAA table')
     conn = sqlite3.connect(db_path)
     merged = pd.read_sql_query("SELECT * from merged", conn)
+    meta = pd.read_sql_query("SELECT * from reach_data", conn)
 
     print('Loading subbasins')
     subbasins = gpd.read_file(clip_path)
@@ -74,6 +75,7 @@ def clip_flowlines(clip_path, gdb_path, db_path, out_dir):
 
     print('Joining Merge Codes')
     intersected = intersected.merge(merged, on='NHDPlusID', how='left')
+    intersected = intersected.merge(meta[['ReachCode', 'TotDASqKm']], on='ReachCode', how='left')
     intersected = intersected.rename(columns={"ReachCode": "MergeCode"})
 
     print('Saving to file')
