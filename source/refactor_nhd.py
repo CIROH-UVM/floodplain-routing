@@ -53,47 +53,6 @@ def merge_reaches(gdb_path, out_path):
 
     [c.execute(q) for q in mainstems]
     [c.execute(q) for q in refactor]
-
-
-    # c.execute('DROP TABLE IF EXISTS merged')
-    # c.execute('CREATE TABLE merged (NHDPlusID REAL, ReachCode REAL);')
-    # c.execute(refactor)
-    # c.execute('DELETE FROM merged WHERE rowid NOT IN (SELECT MIN(rowid) FROM  merged GROUP BY NHDPlusID)')
-
-
-    # # correct divergences
-    # c.execute('SELECT NHDPlusID FROM NHDPlusFlowlineVAA WHERE DIVERGENCE = 2 and TotDASqKm >= 5.18')
-    # starts = c.fetchall()
-    # counter = 1
-    # for i in starts:
-    #     print(f'-{counter}')
-    #     counter += 1
-    #     tmp_reachcodes = list()
-    #     returned = False
-    #     tmp_reach = i[0]
-    #     while not returned:
-    #         c.execute(f'SELECT ReachCode FROM merged WHERE NHDPlusID={tmp_reach}')
-    #         tmp_reachcodes.append(c.fetchall()[0][0])
-    #         c.execute(f'SELECT ds.NHDPlusID FROM NHDPlusFlowlineVAA us JOIN NHDPlusFlowlineVAA ds ON us.tonode = ds.fromnode WHERE us.NHDPlusID={tmp_reach}')
-    #         tmp_reach = c.fetchall()
-    #         if len(tmp_reach) == 1:
-    #             tmp_reach = tmp_reach[0][0]
-    #         elif len(tmp_reach) == 2:
-    #             tmp_reach = [r for r in tmp_reach if r not in starts][0][0]
-    #         elif len(tmp_reach) == 0:
-    #             returned = True
-    #             c.execute(f'SELECT ReachCode FROM merged WHERE NHDPlusID={i[0]}')
-    #             ds_reach = c.fetchall()[0][0]
-    #             continue
-    #         c.execute(f'SELECT rtndiv FROM NHDPlusFlowlineVAA WHERE NHDPlusID={tmp_reach}')
-    #         if c.fetchall()[0][0] == 1:
-    #             returned = True
-    #             c.execute(f'SELECT ReachCode FROM merged WHERE NHDPlusID={tmp_reach}')
-    #             ds_reach = c.fetchall()[0][0]
-    #     for rc in tmp_reachcodes:
-    #         c.execute(f'UPDATE merged SET ReachCode={ds_reach} WHERE ReachCode={rc}')
-        
-
     conn.commit()
 
     c.execute('DROP TABLE IF EXISTS reach_data')
@@ -124,7 +83,7 @@ def clip_flowlines(clip_path, gdb_path, db_path, out_dir):
     intersected = intersected.merge(merged, on='NHDPlusID', how='inner')
     intersected = intersected.merge(meta[['ReachCode', 'TotDASqKm']], on='ReachCode', how='left')
     intersected = intersected.rename(columns={"ReachCode": "MergeCode"})
-    intersected['length'] = intersected.length
+    intersected['length'] = intersected.length  # only being used for subunit membership.  Not for slope calculation
     grouped = intersected.groupby(['MergeCode', 'Code_name'])['length'].sum().reset_index()
     max_length_subgroup = grouped.loc[grouped.groupby('MergeCode')['length'].idxmax()]
     intersected = intersected.drop(['Code_name'], axis=1)
@@ -153,7 +112,7 @@ def run_all():
     gdb_path = r'/users/k/l/klawson1/netfiles/ciroh/slawson/ciroh_network/NHD/NHDPLUS_H_0430_HU4_GDB.gdb'
     huc4 = '0430'
 
-    # gdb_path = download_data(save_path, huc4)
+    gdb_path = download_data(save_path, huc4)
     merge_reaches(gdb_path, db_path)
     clip_flowlines(clip_path, gdb_path, db_path, save_path)
 
