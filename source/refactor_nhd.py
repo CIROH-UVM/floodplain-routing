@@ -10,6 +10,8 @@ import pandas as pd
 
 
 OGR_PATH = os.path.join(sys.prefix, 'bin', 'ogr2ogr')
+MANUAL_OVERRIDE = {'60000200057445': '4300102000489',
+                   '60000200063685': '4300102000489'}
 
 def download_data(save_dir, huc4):
     url = f'https://prd-tnm.s3.amazonaws.com/StagedProducts/Hydrography/NHDPlusHR/Beta/GDB/NHDPLUS_H_{huc4}_HU4_GDB.zip'
@@ -37,21 +39,66 @@ def merge_reaches(gdb_path, out_path):
     print('Exporting VAA table from GDB')
     subprocess.run([OGR_PATH, '-f', 'SQLite', out_path, gdb_path, 'NHDPlusFlowlineVAA'])
 
+    in_file = open(os.path.join(os.path.dirname(__file__), 'generate_mainstems.sql'), 'r')
+    mainstems = in_file.read().split(';')
+    in_file.close()
+
     in_file = open(os.path.join(os.path.dirname(__file__), 'refactor_nhd.sql'), 'r')
-    refactor = in_file.read()
+    refactor = in_file.read().split(';')
     in_file.close()
 
     print('Merging reaches and gathering metadata')
     conn = sqlite3.connect(out_path)
     c = conn.cursor()
-    c.execute('DROP TABLE IF EXISTS merged')
-    c.execute('CREATE TABLE merged (NHDPlusID REAL, ReachCode REAL);')
-    c.execute(refactor)
-    c.execute('DELETE FROM merged WHERE rowid NOT IN (SELECT MIN(rowid) FROM  merged GROUP BY NHDPlusID)')
+
+    [c.execute(q) for q in mainstems]
+    [c.execute(q) for q in refactor]
+
+
+    # c.execute('DROP TABLE IF EXISTS merged')
+    # c.execute('CREATE TABLE merged (NHDPlusID REAL, ReachCode REAL);')
+    # c.execute(refactor)
+    # c.execute('DELETE FROM merged WHERE rowid NOT IN (SELECT MIN(rowid) FROM  merged GROUP BY NHDPlusID)')
+
+
+    # # correct divergences
+    # c.execute('SELECT NHDPlusID FROM NHDPlusFlowlineVAA WHERE DIVERGENCE = 2 and TotDASqKm >= 5.18')
+    # starts = c.fetchall()
+    # counter = 1
+    # for i in starts:
+    #     print(f'-{counter}')
+    #     counter += 1
+    #     tmp_reachcodes = list()
+    #     returned = False
+    #     tmp_reach = i[0]
+    #     while not returned:
+    #         c.execute(f'SELECT ReachCode FROM merged WHERE NHDPlusID={tmp_reach}')
+    #         tmp_reachcodes.append(c.fetchall()[0][0])
+    #         c.execute(f'SELECT ds.NHDPlusID FROM NHDPlusFlowlineVAA us JOIN NHDPlusFlowlineVAA ds ON us.tonode = ds.fromnode WHERE us.NHDPlusID={tmp_reach}')
+    #         tmp_reach = c.fetchall()
+    #         if len(tmp_reach) == 1:
+    #             tmp_reach = tmp_reach[0][0]
+    #         elif len(tmp_reach) == 2:
+    #             tmp_reach = [r for r in tmp_reach if r not in starts][0][0]
+    #         elif len(tmp_reach) == 0:
+    #             returned = True
+    #             c.execute(f'SELECT ReachCode FROM merged WHERE NHDPlusID={i[0]}')
+    #             ds_reach = c.fetchall()[0][0]
+    #             continue
+    #         c.execute(f'SELECT rtndiv FROM NHDPlusFlowlineVAA WHERE NHDPlusID={tmp_reach}')
+    #         if c.fetchall()[0][0] == 1:
+    #             returned = True
+    #             c.execute(f'SELECT ReachCode FROM merged WHERE NHDPlusID={tmp_reach}')
+    #             ds_reach = c.fetchall()[0][0]
+    #     for rc in tmp_reachcodes:
+    #         c.execute(f'UPDATE merged SET ReachCode={ds_reach} WHERE ReachCode={rc}')
+        
+
     conn.commit()
 
     c.execute('DROP TABLE IF EXISTS reach_data')
-    c.execute('CREATE TABLE reach_data (ReachCode REAL, TotDASqKm REAL, max_el REAL, min_el REAL, length REAL, slope REAL GENERATED ALWAYS AS ((max_el-min_el)/(length*100)))')
+    c.execute('UPDATE nhdplusflowlinevaa SET slopelenkm=0 WHERE slopelenkm<0')
+    c.execute('CREATE TABLE reach_data (ReachCode REAL, TotDASqKm REAL, max_el REAL, min_el REAL, length REAL, slope REAL GENERATED ALWAYS AS (CASE WHEN ((max_el-min_el)/(length*100)) = 0 THEN 0.00001 ELSE ((max_el-min_el)/(length*100)) END) STORED)')
     c.execute('INSERT INTO reach_data (ReachCode, TotDASqKm, min_el, max_el, length) SELECT reachcode, max(TotDASqKm), min(minelevsmo), max(maxelevsmo), sum(slopelenkm)*1000 FROM nhdplusflowlinevaa GROUP BY reachcode')
     conn.commit()
 
@@ -71,12 +118,18 @@ def clip_flowlines(clip_path, gdb_path, db_path, out_dir):
     nhd = nhd[['NHDPlusID', 'geometry']]
 
     print('Intersecting layers')
-    intersected = gpd.overlay(nhd, subbasins, how='intersection')
+    intersected = gpd.overlay(nhd, subbasins[['geometry', 'Code_name']], how='intersection')
 
     print('Joining Merge Codes')
-    intersected = intersected.merge(merged, on='NHDPlusID', how='left')
+    intersected = intersected.merge(merged, on='NHDPlusID', how='inner')
     intersected = intersected.merge(meta[['ReachCode', 'TotDASqKm']], on='ReachCode', how='left')
     intersected = intersected.rename(columns={"ReachCode": "MergeCode"})
+    intersected['length'] = intersected.length
+    grouped = intersected.groupby(['MergeCode', 'Code_name'])['length'].sum().reset_index()
+    max_length_subgroup = grouped.loc[grouped.groupby('MergeCode')['length'].idxmax()]
+    intersected = intersected.drop(['Code_name'], axis=1)
+    intersected = intersected.merge(max_length_subgroup[['MergeCode', 'Code_name']], on='MergeCode', how='left')
+    intersected = intersected.merge(subbasins[[c for c in subbasins.columns if c not in ['geometry', 'AreaSqKm']]], on='Code_name', how='left')
 
     print('Saving to file')
     intersected.to_file(os.path.join(out_dir, 'flowlines.shp'))
@@ -97,9 +150,10 @@ def run_all():
     save_path = r'/users/k/l/klawson1/netfiles/ciroh/slawson/ciroh_network'
     db_path = os.path.join(save_path, 'vaa.db')
     clip_path = os.path.join(save_path, 'subunits.shp')
+    gdb_path = r'/users/k/l/klawson1/netfiles/ciroh/slawson/ciroh_network/NHD/NHDPLUS_H_0430_HU4_GDB.gdb'
     huc4 = '0430'
 
-    gdb_path = download_data(save_path, huc4)
+    # gdb_path = download_data(save_path, huc4)
     merge_reaches(gdb_path, db_path)
     clip_flowlines(clip_path, gdb_path, db_path, save_path)
 
