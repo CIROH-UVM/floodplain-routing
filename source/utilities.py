@@ -112,7 +112,7 @@ def reach_hydraulics(r, thiessens, elevations, slope, el_nd, resolution, bins):
                                                 count=('el', 'count'),
                                                 p=('p', 'sum'))
     nans = np.isnan(wrk_df['el'])
-    wrk_df['el'].loc[nans] = ((bins[:-1] + bins[1:]) / 2)[nans]
+    wrk_df.loc[nans, 'el'] = ((bins[:-1] + bins[1:]) / 2)[nans].astype(np.float32)
     
     wrk_df['area'] = wrk_df['count'].cumsum()
     wrk_df['area'] -= (wrk_df['count'] * 0.5)  # Center
