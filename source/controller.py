@@ -23,7 +23,7 @@ def topographic_signatures(run_dict):
     units = reaches[run_dict['unit_field']].unique()
 
     # Initialize logging
-    data_dict = {f: pd.DataFrame() for f in run_dict['fields_of_interest']}
+    data_dict = {f: list() for f in run_dict['fields_of_interest']}
 
     # Process units
     for unit in units:
@@ -51,7 +51,7 @@ def topographic_signatures(run_dict):
             su_data_dict = subunit_hydraulics(hand_path, run_dict['reach_path'], slope_path, stages, reach_field=run_dict['id_field'], reaches=reach_list, fields_of_interest=run_dict['fields_of_interest'])
 
             for f in run_dict['fields_of_interest']:
-                data_dict[f] = pd.concat([data_dict[f], su_data_dict[f]], axis=1)
+                data_dict[f].append(su_data_dict[f])
         
         print('\n'*3)
         print(f'Completed processing {unit} in {round((time.perf_counter() - t1) / 60, 1)} minutes')
@@ -61,6 +61,7 @@ def topographic_signatures(run_dict):
     run_dict['out_directory'] = os.path.join(run_dict['out_directory'], "outputs")
     os.makedirs(run_dict['out_directory'], exist_ok=True)
     for f in run_dict['fields_of_interest']:
+        data_dict[f] = pd.concat(data_dict[f], axis=1)
         data_dict[f].to_csv(os.path.join(run_dict['out_directory'], f'{f}.csv'), index=False)
     print('Finished saving')
 
@@ -119,8 +120,8 @@ def geomorphon_stats(reach_path, aoi_path, working_directory, out_directory, id_
 if __name__ == '__main__':
     base_directory = r'/netfiles/ciroh/floodplainsData'
     run_metadata = {'data_directory': base_directory,
-                    'out_directory': os.path.join(base_directory, 'runs', '1'), 
-                    'reach_path': os.path.join(base_directory, 'runs', '1', 'catchments.shp'), 
+                    'out_directory': os.path.join(base_directory, 'runs', '2'), 
+                    'reach_path': os.path.join(base_directory, 'runs', '2', 'catchments.shp'), 
                     'id_field': 'MergeCode', 
                     'unit_field': '8_name',
                     'subunit_field': '12_code',
