@@ -67,8 +67,8 @@ def topographic_signatures(run_dict):
 
 
 def batch_geomorphons(working_directory):
-    run_list = ['WIN_0504']
-    unit_dict = {'WIN': 'winooski', 'OTR': 'otter', 'LKC': 'champlain'}
+    run_list = ['MSQ_0105']
+    unit_dict = {'WIN': 'winooski', 'OTR': 'otter', 'LKC': 'champlain', 'MSQ': 'missisquoi'}
     for run in run_list:
         print(f'Running basin {run}')
         tstart = time.perf_counter()
@@ -120,11 +120,12 @@ def geomorphon_stats(reach_path, aoi_path, working_directory, out_directory, id_
 if __name__ == '__main__':
     base_directory = r'/netfiles/ciroh/floodplainsData'
     run_metadata = {'data_directory': base_directory,
-                    'out_directory': os.path.join(base_directory, 'runs', '2'), 
-                    'reach_path': os.path.join(base_directory, 'runs', '2', 'catchments.shp'), 
-                    'id_field': 'MergeCode', 
+                    'out_directory': os.path.join(base_directory, 'runs', 'stew_sga'), 
+                    'reach_path': os.path.join(base_directory, 'runs', 'stew_sga', 'catchments.shp'), 
+                    'id_field': 'ReachCode', 
                     'unit_field': '8_name',
                     'subunit_field': '12_code',
                     'fields_of_interest': ['area', 'el', 'p', 'rh', 'rh_prime', 'vol'], 
                     'scaled_stages': True}
-    topographic_signatures(run_metadata)
+    # topographic_signatures(run_metadata)
+    batch_geomorphons(base_directory)
