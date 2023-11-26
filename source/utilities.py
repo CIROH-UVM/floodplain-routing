@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 from osgeo import gdal, ogr
 from rasterio import features
 from scipy.ndimage import gaussian_filter1d
-from whitebox import WhiteboxTools
+# from whitebox import WhiteboxTools
 
 
 
@@ -197,6 +197,53 @@ def extract_topographic_signature(hand_path, aoi_path, slope_path, reaches=None,
             fig.savefig(tmp_path, dpi=300)
         
         plt.close(fig)
+
+def add_bathymetry(geom, da, slope, shape='rectangle'):
+    filter_arg = np.argmin(geom['el'] < 0.015)
+    top_width = geom['area'][filter_arg]
+    flowrate = (0.4962 * da) / 35.3147
+    n = 0.035
+    stage_space = np.linspace(0, 10, 1000)
+
+    if shape == 'trapezoid':
+        area = (0.8 * top_width) * stage_space  # Follum 2023 assumed Bw=0.6Tw
+        perimeter = (0.6 * top_width) + (2 * (((stage_space ** 2) + ((0.2 * top_width) ** 2)) ** 0.5))
+        bottom_width = 0.6 * top_width
+    elif shape == 'rectangle':
+        area = (stage_space * top_width)
+        perimeter = (top_width + (2 * stage_space))
+        bottom_width = top_width
+
+    flowrate_space = (1 / n) * (stage_space * top_width) * (slope ** 0.5) * ((area / perimeter) ** (2 / 3))
+    add_depth = np.interp(flowrate, flowrate_space, stage_space)
+    add_volume = np.interp(flowrate, flowrate_space, area)
+    add_perimeter = np.interp(flowrate, flowrate_space, perimeter)
+
+    # Remove data below 0.015m
+    geom = {i: geom[i][filter_arg:] for i in geom}
+
+    # Replace data below 0.015m
+    replace_el = np.linspace(0, add_depth, filter_arg, endpoint=False)
+    replace_tw = np.linspace(bottom_width, top_width, filter_arg, endpoint=False)
+    replace_vol = ((bottom_width + replace_tw) / 2) * replace_el
+    replace_p = bottom_width + (2 * replace_el)
+
+    # Add bathymetry
+    geom['area'] = np.insert(geom['area'], 0, replace_tw)
+
+    geom['el'] -= geom['el'][0]  # first data point should be at top of bathymetry
+    geom['el'] += add_depth
+    geom['el'] = np.insert(geom['el'], 0, replace_el)
+
+    geom['vol'] -= geom['vol'][0]
+    geom['vol'] += add_volume
+    geom['vol'] = np.insert(geom['vol'], 0, replace_vol)
+
+    geom['p'] -= geom['p'][0]
+    geom['p'] += add_perimeter
+    geom['p'] = np.insert(geom['p'], 0, replace_p)
+
+    return geom
 
 def plot_rh_curve(hand_path, aoi_path, slope_path, reaches=None, max_el=10, nstages=1000, show=False, save_path=None, reach_field=None):
     elevations = load_raster(hand_path)
