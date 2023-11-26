@@ -8,15 +8,16 @@ from utilities import subunit_hydraulics, generate_geomorphons, add_bathymetry
 from osgeo import ogr
 
 
-def topographic_signatures(run_dict):
+def topographic_signatures(meta_path):
+    # Load run config
+    with open(meta_path, 'r') as f:
+        run_dict = json.loads(f)
+
     # Set up run
     if run_dict['scaled_stages']:
         max_stage_equation = lambda da: 5 * (0.26 * (da ** 0.287))
     else:
         max_stage_equation = lambda da: 10
-
-    with open(os.path.join(run_dict['run_directory'], 'run_metadata.json'), 'w') as f:
-        json.dump(run_dict, f)
 
     # Load reaches/basins to run
     reaches = gpd.read_file(run_dict['reach_path'], ignore_geometry=True)
@@ -63,7 +64,11 @@ def topographic_signatures(run_dict):
         data_dict[f].to_csv(os.path.join(run_dict['out_directory'], f'{f}.csv'), index=False)
     print('Finished saving')
 
-def batch_add_bathymetry(run_dict):
+def batch_add_bathymetry(meta_path):
+    # Load run config
+    with open(meta_path, 'r') as f:
+        run_dict = json.loads(f)
+
     # Import data
     geometry = {'el': pd.read_csv(os.path.join(run_dict['out_directory'], 'el.csv')),
                 'area': pd.read_csv(os.path.join(run_dict['out_directory'], 'area.csv')),
@@ -120,6 +125,11 @@ def batch_add_bathymetry(run_dict):
     
     for i in out_dfs:
         out_dfs[i].to_csv(os.path.join(run_dict['out_directory'], f'{i}.csv'))
+    
+    run_dict['bathymetry_added'] = True
+    with open(meta_path, 'w') as f:
+        json.dump(run_dict, f)
+
 
 
 def batch_geomorphons(working_directory):
@@ -148,7 +158,11 @@ if __name__ == '__main__':
                     'unit_field': '8_name',
                     'subunit_field': '12_code',
                     'fields_of_interest': ['area', 'el', 'p', 'rh', 'rh_prime', 'vol'], 
-                    'scaled_stages': True}
+                    'scaled_stages': True,
+                    'bathymetry_added': False}
+    meta_path = os.path.join(run_metadata['run_directory'], 'run_metadata.json')
+    with open(meta_path, 'w') as f:
+        json.dump(run_metadata, f)
     
-    topographic_signatures(run_metadata)
-    batch_add_bathymetry(run_metadata)
+    topographic_signatures(meta_path)
+    batch_add_bathymetry(meta_path)
