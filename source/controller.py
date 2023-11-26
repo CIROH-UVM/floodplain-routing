@@ -15,7 +15,7 @@ def topographic_signatures(run_dict):
     else:
         max_stage_equation = lambda da: 10
 
-    with open(os.path.join(run_dict['out_directory'], 'run_metadata.json'), 'w') as f:
+    with open(os.path.join(run_dict['run_directory'], 'run_metadata.json'), 'w') as f:
         json.dump(run_dict, f)
 
     # Load reaches/basins to run
@@ -58,21 +58,18 @@ def topographic_signatures(run_dict):
         print('='*50)
 
     print('Saving data')
-    run_dict['out_directory'] = os.path.join(run_dict['out_directory'], "outputs")
     os.makedirs(run_dict['out_directory'], exist_ok=True)
     for f in run_dict['fields_of_interest']:
         data_dict[f].to_csv(os.path.join(run_dict['out_directory'], f'{f}.csv'), index=False)
     print('Finished saving')
 
-def batch_add_bathymetry():
+def batch_add_bathymetry(run_dict):
     # Import data
-    in_path = 'G:\\floodplainsData\\runs\\2\\outputs'
-    out_path = 'G:\\floodplainsData\\runs\\2\\bathymetry_dev'
-    geometry = {'el': pd.read_csv(os.path.join(in_path, 'el.csv')),
-                'area': pd.read_csv(os.path.join(in_path, 'area.csv')),
-                'vol': pd.read_csv(os.path.join(in_path, 'vol.csv')),
-                'p': pd.read_csv(os.path.join(in_path, 'p.csv'))}
-    reach_data = pd.read_csv("G:\\floodplainsData\\runs\\2\\reach_data.csv")
+    geometry = {'el': pd.read_csv(os.path.join(run_dict['out_directory'], 'el.csv')),
+                'area': pd.read_csv(os.path.join(run_dict['out_directory'], 'area.csv')),
+                'vol': pd.read_csv(os.path.join(run_dict['out_directory'], 'vol.csv')),
+                'p': pd.read_csv(os.path.join(run_dict['out_directory'], 'p.csv'))}
+    reach_data = pd.read_csv(run_dict['reach_meta_path'])
     reach_data['ReachCode'] = reach_data['ReachCode'].astype(np.int64).astype(str)
     reach_data = reach_data.set_index('ReachCode')
 
@@ -122,7 +119,7 @@ def batch_add_bathymetry():
             out_dfs[i] = out_dfs[i].copy()
     
     for i in out_dfs:
-        out_dfs[i].to_csv(os.path.join(out_path, f'{i}.csv'))
+        out_dfs[i].to_csv(os.path.join(run_dict['out_directory'], f'{i}.csv'))
 
 
 def batch_geomorphons(working_directory):
@@ -138,53 +135,20 @@ def batch_geomorphons(working_directory):
         print(f'Finished in {round((time.perf_counter() - tstart) / 60), 1} minutes')
         print('='*25)
 
-def geomorphon_stats(reach_path, aoi_path, working_directory, out_directory, id_field):
-     # Load reaches/basins to run
-    reaches = pd.read_csv(reach_path, dtype={'subunit': 'str', 'unit': 'str'})
-    units = reaches['unit'].unique()
-
-    # Initialize logging
-    data_dict = {f: pd.DataFrame() for f in fields_of_interest}
-
-    # Process units
-    for unit in units:
-        reaches_in_unit = reaches.query(f'unit == "{unit}"')
-        subunits = np.sort(reaches_in_unit['subunit'].unique())
-
-        t1 = time.perf_counter()
-        print(f'Unit: {unit} | Subunits: {len(subunits)}')
-        counter = 1
-        for subunit in subunits:
-            print(f'subunit {counter}: {subunit}')
-            counter += 1
-            geomorphon_path = os.path.join(working_directory, unit, 'subbasins', subunit, 'rasters', 'slope.tif')
-            su_data_dict = subunit_hydraulics(hand_path, aoi_path, slope_path, stages, reach_field=id_field, reaches=reach_list, fields_of_interest=fields_of_interest)
-
-            for f in fields_of_interest:
-                data_dict[f] = pd.concat([data_dict[f], su_data_dict[f]], axis=1)
-        
-        print('\n'*3)
-        print(f'Completed processing {unit} in {round((time.perf_counter() - t1) / 60, 1)} minutes')
-        print('='*50)
-
-    print('Saving data')
-    out_directory = os.path.join(out_directory, "outputs")
-    os.makedirs(out_directory, exist_ok=True)
-    for f in fields_of_interest:
-            data_dict[f].to_csv(os.path.join(out_directory, f'{f}.csv'), index=False)
-    print('Finished saving')
-        
-
 
 if __name__ == '__main__':
-    # base_directory = r'/netfiles/ciroh/floodplainsData'
-    # run_metadata = {'data_directory': base_directory,
-    #                 'out_directory': os.path.join(base_directory, 'runs', '1'), 
-    #                 'reach_path': os.path.join(base_directory, 'runs', '1', 'catchments.shp'), 
-    #                 'id_field': 'MergeCode', 
-    #                 'unit_field': '8_name',
-    #                 'subunit_field': '12_code',
-    #                 'fields_of_interest': ['area', 'el', 'p', 'rh', 'rh_prime', 'vol'], 
-    #                 'scaled_stages': True}
-    # topographic_signatures(run_metadata)
-    batch_add_bathymetry()
+    base_directory = r'/netfiles/ciroh/floodplainsData'
+    run_id = '3'
+    run_metadata = {'data_directory': base_directory,
+                    'run_directory': os.path.join(base_directory, 'runs', run_id), 
+                    'out_directory': os.path.join(base_directory, 'runs', run_id, 'outputs'), 
+                    'reach_path': os.path.join(base_directory, 'runs', run_id, 'catchments.shp'),
+                    'reach_meta_path': os.path.join(base_directory, 'runs', run_id, 'reach_data.csv'), 
+                    'id_field': 'MergeCode', 
+                    'unit_field': '8_name',
+                    'subunit_field': '12_code',
+                    'fields_of_interest': ['area', 'el', 'p', 'rh', 'rh_prime', 'vol'], 
+                    'scaled_stages': True}
+    
+    topographic_signatures(run_metadata)
+    batch_add_bathymetry(run_metadata)
