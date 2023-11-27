@@ -11,7 +11,7 @@ from osgeo import ogr
 def topographic_signatures(meta_path):
     # Load run config
     with open(meta_path, 'r') as f:
-        run_dict = json.loads(f)
+        run_dict = json.loads(f.read())
 
     # Set up run
     if run_dict['scaled_stages']:
@@ -68,7 +68,7 @@ def topographic_signatures(meta_path):
 def batch_add_bathymetry(meta_path):
     # Load run config
     with open(meta_path, 'r') as f:
-        run_dict = json.loads(f)
+        run_dict = json.load(f)
 
     # Import data
     geometry = {'el': pd.read_csv(os.path.join(run_dict['out_directory'], 'el.csv')),
@@ -146,10 +146,7 @@ def batch_geomorphons(working_directory):
         print(f'Finished in {round((time.perf_counter() - tstart) / 60), 1} minutes')
         print('='*25)
 
-
-if __name__ == '__main__':
-    base_directory = r'/netfiles/ciroh/floodplainsData'
-    run_id = '3'
+def make_run_template(path, base_directory='/path/to/data', run_id='1'):
     run_metadata = {'data_directory': base_directory,
                     'run_directory': os.path.join(base_directory, 'runs', run_id), 
                     'out_directory': os.path.join(base_directory, 'runs', run_id, 'outputs'), 
@@ -161,9 +158,12 @@ if __name__ == '__main__':
                     'fields_of_interest': ['area', 'el', 'p', 'rh', 'rh_prime', 'vol'], 
                     'scaled_stages': True,
                     'bathymetry_added': False}
+    os.makedirs(run_metadata['run_directory'], exists_ok=True)
     meta_path = os.path.join(run_metadata['run_directory'], 'run_metadata.json')
     with open(meta_path, 'w') as f:
         json.dump(run_metadata, f)
-    
+
+if __name__ == '__main__':
+    meta_path = r'netfiles\ciroh\floodplainsData\runs\3\run_metadata.json'
     topographic_signatures(meta_path)
     batch_add_bathymetry(meta_path)

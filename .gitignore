@@ -9,3 +9,5 @@ grass_tmp
 ARCHIVE
 working
 samples
+*__pycache__*
+whitebox_tools
