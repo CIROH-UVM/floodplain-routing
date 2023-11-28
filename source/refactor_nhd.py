@@ -81,7 +81,7 @@ def clip_flowlines(clip_path, gdb_path, db_path, out_dir):
 
     print('Joining Merge Codes')
     intersected = intersected.merge(merged, on='NHDPlusID', how='inner')
-    intersected = intersected.merge(meta[['ReachCode', 'TotDASqKm']], on='ReachCode', how='left')
+    intersected = intersected.merge(meta[['ReachCode', 'TotDASqKm', 'slope']], on='ReachCode', how='left')
     intersected = intersected.rename(columns={"ReachCode": "MergeCode"})
     intersected['length'] = intersected.length  # only being used for subunit membership.  Not for slope calculation
     grouped = intersected.groupby(['MergeCode', 'Code_name'])['length'].sum().reset_index()
@@ -89,6 +89,7 @@ def clip_flowlines(clip_path, gdb_path, db_path, out_dir):
     intersected = intersected.drop(['Code_name'], axis=1)
     intersected = intersected.merge(max_length_subgroup[['MergeCode', 'Code_name']], on='MergeCode', how='left')
     intersected = intersected.merge(subbasins[[c for c in subbasins.columns if c not in ['geometry', 'AreaSqKm']]], on='Code_name', how='left')
+    intersected = intersected.drop(['length'], axis=1)
 
     print('Saving to file')
     intersected.to_file(os.path.join(out_dir, 'flowlines.shp'))
