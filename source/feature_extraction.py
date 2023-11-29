@@ -4,10 +4,12 @@ import os
 from scipy.ndimage import gaussian_filter1d
 import matplotlib.pyplot as plt
 
-def extract_features():
+def extract_features(run_path):
     # Load data
-    working_dir = r'G:\floodplainsData\runs\2\bathymetry_dev'
-    reach_path = r"G:\floodplainsData\runs\2\reach_data.csv"
+    with open(run_path, 'r') as f:
+        run_dict = json.loads(f.read())
+    working_dir = run_dict['out_directory']
+    reach_path = run_dict['reach_meta_path']
     el_path = os.path.join(working_dir, 'el.csv')
     rh_path = os.path.join(working_dir, 'rh.csv')
     rh_prime_path = os.path.join(working_dir, 'rh_prime.csv')
@@ -158,14 +160,15 @@ def extract_features():
         features.append([reach, ave, min_val, el_bathymetry, argmin, el_argmin, start, start_el, stop, stop_el, height, height_ind, vol, vol_norm, w_bottom, w_edap, w_min, w_edep, rh_edap, rh_min, rh_edep, slope_start_min, slope_min_stop])
 
     # Save
-    merge_df = r"G:\floodplainsData\runs\2\muskingum-cunge\mc_out.csv"
+    merge_df = run_dict['muskingum_path']
     merge_df = pd.read_csv(merge_df)
     merge_df['ReachCode'] = merge_df['ReachCode'].astype(str)
 
     out_df = pd.DataFrame(features, columns=['ReachCode', 'ave_rhp', 'min_rhp', 'el_bathymetry', 'ind_min', 'el_min', 'ind_EDAP', 'el_EDAP', 'ind_EDEP', 'el_EDEP', 'height', 'height_ind', 'vol', 'vol_norm', 'w_bottom', 'w_EDAP', 'w_min', 'w_edep', 'rh_edap', 'rh_min', 'rh_edep', 'slope_edap-min', 'slope_min-edep'])
     merge_df = merge_df.merge(out_df, how='inner', on='ReachCode')
-    merge_df.to_csv(r"G:\floodplainsData\runs\2\analysis\mc_topo_sig.csv", index=False)
+    merge_df.to_csv(run_dict['analysis_path'], index=False)
 
 
 if __name__ == '__main__':
-    extract_features()
+    run_path = r'netfiles\ciroh\floodplainsData\runs\3\run_metadata.json'
+    extract_features(run_path)
