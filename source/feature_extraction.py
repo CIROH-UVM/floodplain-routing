@@ -29,20 +29,18 @@ def extract_features(run_path):
     rh_prime_path = os.path.join(working_dir, 'rh_prime.csv')
     area_path = os.path.join(working_dir, 'area.csv')
 
-    # reach_data = gpd.read_file(run_dict['reach_path'], ignore_geometry=True)
-    # reach_data = reach_data.drop_duplicates(subset=['MergeCode'])
-    # reach_data['ReachCode'] = reach_data['MergeCode']
-    # reach_data['ReachCode'] = reach_data['ReachCode'].astype(np.int64).astype(str)
-    # reach_data = reach_data.set_index('ReachCode')
     reach_data = pd.read_csv(reach_path)
     reach_data['ReachCode'] = reach_data['ReachCode'].astype(np.int64).astype(str)
     reach_data = reach_data.set_index('ReachCode')
+
     el_data = pd.read_csv(el_path)
     el_data = el_data.dropna(axis=1)
+
     if not os.path.exists(el_scaled_path):
         el_scaled_data = scale_stage(reach_data, el_data)
         el_scaled_data.to_csv(el_scaled_path)
     el_scaled_data = pd.read_csv(el_scaled_path)
+
     rh_data = pd.read_csv(rh_path)
     rh_data = rh_data.dropna(axis=1)
 
@@ -51,8 +49,8 @@ def extract_features(run_path):
     rh_prime_data.iloc[-1] = rh_prime_data.iloc[-2]
     rh_prime_data[:] = gaussian_filter1d(rh_prime_data.T, 15).T
     rh_prime_data[rh_prime_data < -3] = -3
-
     rh_prime_data = rh_prime_data.dropna(axis=1)
+
     area_data = pd.read_csv(area_path)
     area_data = area_data.dropna(axis=1)
 
@@ -69,6 +67,7 @@ def extract_features(run_path):
     features = list()
     for reach in list(valid_reaches):
         print(reach)
+        # Subset data
         tmp_meta = reach_data.loc[reach]
         tmp_el = el_data[reach].to_numpy()
         tmp_el_scaled = el_scaled_data[reach].to_numpy()
@@ -76,29 +75,10 @@ def extract_features(run_path):
         tmp_rh_prime = rh_prime_data[reach].to_numpy()
         tmp_area = area_data[reach].to_numpy() / tmp_meta['length']
 
-        min_val = np.nanmin(tmp_rh_prime)
-        argmin = np.nanargmin(tmp_rh_prime)
-        el_argmin = tmp_el[argmin]
-        w_argmin = tmp_area[argmin]
-        argmax_after_min = argmin + np.nanargmax(tmp_rh_prime[argmin:])
-        max_after_min = tmp_rh_prime[argmax_after_min]
-        el_argmax_after_min = tmp_el[argmax_after_min]
-
+        # Process
         bathymetry_break = np.argmax(tmp_area > tmp_area[0])
-        w_bottom = tmp_area[0]
         el_bathymetry = tmp_el[bathymetry_break]
-
-        # Get first flat after min
-        second_derivative = np.append(tmp_rh_prime[1:], tmp_rh_prime[-1]) - tmp_rh_prime
-        arg_0slope_after_min = argmin + np.nanargmax(second_derivative[argmin:] < 0)
-        rhp_slope0_after_min = tmp_rh_prime[arg_0slope_after_min]
-        el_slope0_after_min = tmp_el[arg_0slope_after_min]
-
-        slope_start_min = (min_val - tmp_rh_prime[0]) / (argmin)
-        if argmax_after_min == argmin:
-            slope_min_max = 0
-        else:
-            slope_min_max = (max_after_min - min_val) / (argmax_after_min - argmin)
+        el_bathymetry_scaled = tmp_el_scaled[bathymetry_break]
 
         ave = np.nanmean(tmp_rh_prime)
 
@@ -108,54 +88,54 @@ def extract_features(run_path):
         runs = np.insert(runs, 0, runs[0])
         runs[~le_ave] = -1
         unique, counts = np.unique(runs[runs != -1], return_counts=True)
-        if unique.size != 0:
-            biggest_run = unique[np.argmax(counts)]
-            start = np.argmax(runs == biggest_run)
-            stop = (len(tmp_rh_prime) - np.argmax(runs[::-1] == biggest_run)) - 1
-            start_el = tmp_el[start]
-            stop_el = tmp_el[stop]
-            height = stop_el - start_el
-            height_ind = stop - start
 
-            del_el_meters = tmp_el[1:] - tmp_el[:-1]
-            del_el_meters = np.append(del_el_meters, del_el_meters[-1])
-            del_el_scaled = tmp_el_scaled[1:] - tmp_el_scaled[:-1]
-            del_el_scaled = np.append(del_el_scaled, del_el_scaled[-1])
-            vol = np.sum((ave - tmp_rh_prime[start:stop]) * del_el_meters[start:stop])
-            vol_scaled = np.sum((ave - tmp_rh_prime[start:stop]) * del_el_scaled[start:stop])
+        biggest_run = unique[np.argmax(counts)]
+        start = np.argmax(runs == biggest_run)
+        if start < bathymetry_break:
+            start = bathymetry_break
+        stop = (len(tmp_rh_prime) - np.argmax(runs[::-1] == biggest_run)) - 1
 
-            if argmin != start:
-                # slope_start_min = (min_val - ave) / (argmin - start)  # Old
-                slope_start_min = (min_val - ave) / (el_argmin - start_el)
-            else:
-                slope_start_min = 0
-            if argmin != stop:
-                # slope_min_stop = (ave - min_val) / (stop - argmin) # Old
-                slope_min_stop = (ave - min_val) / (stop_el - el_argmin)
-            else:
-                slope_min_stop = 0
+        start_el = tmp_el[start]
+        stop_el = tmp_el[stop]
+
+        start_el_scaled = tmp_el_scaled[start]
+        stop_el_scaled = tmp_el_scaled[stop]
+
+        height = stop_el - start_el
+        height_scaled = stop_el_scaled - start_el_scaled
+
+        argmin = np.argmin(tmp_rh_prime[start:stop]) + start
+        min_val = tmp_rh_prime[argmin]
+        el_argmin = tmp_el[argmin]
+        el_argmin_scaled = tmp_el_scaled[argmin]
+
+        del_el_meters = tmp_el[1:] - tmp_el[:-1]
+        del_el_meters = np.append(del_el_meters, del_el_meters[-1])
+        del_el_scaled = tmp_el_scaled[1:] - tmp_el_scaled[:-1]
+        del_el_scaled = np.append(del_el_scaled, del_el_scaled[-1])
+        vol = np.sum((ave - tmp_rh_prime[start:stop]) * del_el_meters[start:stop])
+        vol_scaled = np.sum((ave - tmp_rh_prime[start:stop]) * del_el_scaled[start:stop])
+
+        if argmin != start:
+            # slope_start_min = (min_val - ave) / (argmin - start)  # Old
+            slope_start_min = (min_val - ave) / (el_argmin - start_el)
         else:
-            start = 0
-            stop = 1
             slope_start_min = 0
+        if argmin != stop:
+            # slope_min_stop = (ave - min_val) / (stop - argmin) # Old
+            slope_min_stop = (ave - min_val) / (stop_el - el_argmin)
+        else:
             slope_min_stop = 0
-            height_ind = 1
-            vol = 0
-            vol_scaled = 0
 
-
+        rh_bottom = tmp_rh[max(bathymetry_break - 1, 0)]
         rh_edap = tmp_rh[start]
         rh_min = tmp_rh[argmin]
         rh_edep = tmp_rh[stop]
 
+        w_bottom = tmp_area[max(bathymetry_break - 1, 0)]
         w_edap = tmp_area[start]
         w_min = tmp_area[argmin]
         w_edep = tmp_area[stop]
-
-        argmin = tmp_el_scaled[argmin]
-        start = tmp_el_scaled[start]
-        stop = tmp_el_scaled[stop]
-        height_ind = stop - start
 
         plot = False
         if plot:
@@ -177,7 +157,7 @@ def extract_features(run_path):
             ax.axhline(stop_el, c='r', ls='dotted', lw=1)
             ax.text(-3, stop_el, 'EDEP', va='bottom', ha='left')
 
-            ax.fill_betweenx(tmp_el[start:stop], tmp_rh_prime[start:stop], np.repeat(ave, height_ind), fc='r')
+            ax.fill_betweenx(tmp_el[start:stop], tmp_rh_prime[start:stop], np.repeat(ave, stop - start), fc='r')
             ax.text((min_val + ave) / 2, (tmp_el[start] + tmp_el[stop]) / 2, 'volume', va='center', ha='center')
 
             ax.text(ave, (tmp_el[start] + tmp_el[stop]) / 2, 'height ED', va='center', ha='left', rotation=90)
@@ -194,7 +174,7 @@ def extract_features(run_path):
             fig.savefig(r'/netfiles/ciroh/floodplainsData/runs/3/outputs/feature_plots/{}.png'.format(reach))
             # plt.show()
 
-        features.append([reach, ave, min_val, el_bathymetry, argmin, el_argmin, start, start_el, stop, stop_el, height, height_ind, vol, vol_scaled, w_bottom, w_edap, w_min, w_edep, rh_edap, rh_min, rh_edep, slope_start_min, slope_min_stop])
+        features.append([reach, ave, el_bathymetry, start_el, el_argmin, stop_el, el_bathymetry_scaled, start_el_scaled, el_argmin_scaled, stop_el_scaled, height, height_scaled, vol, vol_scaled, min_val, slope_start_min, slope_min_stop, rh_bottom, rh_edap, rh_min, rh_edep, w_bottom, w_edap, w_min, w_edep])
 
     # Save
     merge_df = run_dict['muskingum_path']
@@ -202,7 +182,8 @@ def extract_features(run_path):
     merge_df = pd.read_csv(merge_df)
     merge_df['ReachCode'] = merge_df['ReachCode'].astype(int).astype(str)
 
-    out_df = pd.DataFrame(features, columns=['ReachCode', 'ave_rhp', 'min_rhp', 'el_bathymetry', 'ind_min', 'el_min', 'ind_EDAP', 'el_EDAP', 'ind_EDEP', 'el_EDEP', 'height', 'height_ind', 'vol', 'vol_scaled', 'w_bottom', 'w_EDAP', 'w_min', 'w_edep', 'rh_edap', 'rh_min', 'rh_edep', 'slope_edap-min', 'slope_min-edep'])
+    columns = ['ReachCode', 'ave_rhp', 'el_bathymetry', 'el_edap', 'el_min', 'el_edep', 'el_bathymetry_scaled', 'el_edap_scaled', 'el_min_scaled', 'el_edep_scaled', 'height', 'height_scaled', 'vol', 'vol_scaled', 'min_rhp', 'slope_start_min', 'slope_min_stop', 'rh_bottom', 'rh_edap', 'rh_min', 'rh_edep', 'w_bottom', 'w_edap', 'w_min', 'w_edep']
+    out_df = pd.DataFrame(features, columns=columns)
     merge_df = merge_df.merge(out_df, how='inner', on='ReachCode')
     os.makedirs(os.path.dirname(run_dict['analysis_path']), exist_ok=True)
     merge_df.to_csv(run_dict['analysis_path'], index=False)
