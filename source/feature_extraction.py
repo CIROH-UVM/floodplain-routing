@@ -13,7 +13,7 @@ def scale_stage(reach_data, el_data):
     reaches = pd.DataFrame({'ReachCode': el_data.columns})
     reach_data = pd.merge(reach_data, reaches, right_on='ReachCode', left_index=True, how='right')
     max_stages = max_stage_equation(reach_data['TotDASqKm'].to_numpy())
-    el_scaled_data.iloc[:, :] = el_data.iloc[:, :] / max_stages
+    el_scaled_data.iloc[:, :] = (el_data.iloc[:, :] / max_stages) * 5
     el_scaled_data.iloc[:, 0] = el_data.iloc[:, 0]
     return el_scaled_data
 
@@ -29,9 +29,12 @@ def extract_features(run_path):
     rh_prime_path = os.path.join(working_dir, 'rh_prime.csv')
     area_path = os.path.join(working_dir, 'area.csv')
 
-    reach_data = gpd.read_file(run_dict['reach_path'], ignore_geometry=True)
-    reach_data = reach_data.drop_duplicates(subset=['MergeCode'])
-    reach_data['ReachCode'] = reach_data['MergeCode']
+    # reach_data = gpd.read_file(run_dict['reach_path'], ignore_geometry=True)
+    # reach_data = reach_data.drop_duplicates(subset=['MergeCode'])
+    # reach_data['ReachCode'] = reach_data['MergeCode']
+    # reach_data['ReachCode'] = reach_data['ReachCode'].astype(np.int64).astype(str)
+    # reach_data = reach_data.set_index('ReachCode')
+    reach_data = pd.read_csv(reach_path)
     reach_data['ReachCode'] = reach_data['ReachCode'].astype(np.int64).astype(str)
     reach_data = reach_data.set_index('ReachCode')
     el_data = pd.read_csv(el_path)
@@ -68,6 +71,7 @@ def extract_features(run_path):
         print(reach)
         tmp_meta = reach_data.loc[reach]
         tmp_el = el_data[reach].to_numpy()
+        tmp_el_scaled = el_scaled_data[reach].to_numpy()
         tmp_rh = rh_data[reach].to_numpy()
         tmp_rh_prime = rh_prime_data[reach].to_numpy()
         tmp_area = area_data[reach].to_numpy() / tmp_meta['length']
@@ -80,8 +84,9 @@ def extract_features(run_path):
         max_after_min = tmp_rh_prime[argmax_after_min]
         el_argmax_after_min = tmp_el[argmax_after_min]
 
-        w_bottom = tmp_area[1]
-        el_bathymetry = tmp_el[np.argmax(tmp_area > tmp_area[0])]
+        bathymetry_break = np.argmax(tmp_area > tmp_area[0])
+        w_bottom = tmp_area[0]
+        el_bathymetry = tmp_el[bathymetry_break]
 
         # Get first flat after min
         second_derivative = np.append(tmp_rh_prime[1:], tmp_rh_prime[-1]) - tmp_rh_prime
@@ -112,15 +117,21 @@ def extract_features(run_path):
             height = stop_el - start_el
             height_ind = stop - start
 
-            vol = np.sum(ave - tmp_rh_prime[start:stop])
-            vol_norm = np.sum((ave - tmp_rh_prime[start:stop]) * tmp_el[start:stop])
+            del_el_meters = tmp_el[1:] - tmp_el[:-1]
+            del_el_meters = np.append(del_el_meters, del_el_meters[-1])
+            del_el_scaled = tmp_el_scaled[1:] - tmp_el_scaled[:-1]
+            del_el_scaled = np.append(del_el_scaled, del_el_scaled[-1])
+            vol = np.sum((ave - tmp_rh_prime[start:stop]) * del_el_meters[start:stop])
+            vol_scaled = np.sum((ave - tmp_rh_prime[start:stop]) * del_el_scaled[start:stop])
 
             if argmin != start:
-                slope_start_min = (min_val - ave) / (argmin - start)
+                # slope_start_min = (min_val - ave) / (argmin - start)  # Old
+                slope_start_min = (min_val - ave) / (el_argmin - start_el)
             else:
                 slope_start_min = 0
             if argmin != stop:
-                slope_min_stop = (ave - min_val) / (stop - argmin)
+                # slope_min_stop = (ave - min_val) / (stop - argmin) # Old
+                slope_min_stop = (ave - min_val) / (stop_el - el_argmin)
             else:
                 slope_min_stop = 0
         else:
@@ -130,7 +141,8 @@ def extract_features(run_path):
             slope_min_stop = 0
             height_ind = 1
             vol = 0
-            vol_norm = 0
+            vol_scaled = 0
+
 
         rh_edap = tmp_rh[start]
         rh_min = tmp_rh[argmin]
@@ -140,8 +152,10 @@ def extract_features(run_path):
         w_min = tmp_area[argmin]
         w_edep = tmp_area[stop]
 
-        # z = np.polyfit(tmp_el, tmp_rh_prime, 3)
-        # p = np.poly1d(z)
+        argmin = tmp_el_scaled[argmin]
+        start = tmp_el_scaled[start]
+        stop = tmp_el_scaled[stop]
+        height_ind = stop - start
 
         plot = False
         if plot:
@@ -180,19 +194,20 @@ def extract_features(run_path):
             fig.savefig(r'/netfiles/ciroh/floodplainsData/runs/3/outputs/feature_plots/{}.png'.format(reach))
             # plt.show()
 
-        features.append([reach, ave, min_val, el_bathymetry, argmin, el_argmin, start, start_el, stop, stop_el, height, height_ind, vol, vol_norm, w_bottom, w_edap, w_min, w_edep, rh_edap, rh_min, rh_edep, slope_start_min, slope_min_stop])
+        features.append([reach, ave, min_val, el_bathymetry, argmin, el_argmin, start, start_el, stop, stop_el, height, height_ind, vol, vol_scaled, w_bottom, w_edap, w_min, w_edep, rh_edap, rh_min, rh_edep, slope_start_min, slope_min_stop])
 
     # Save
     merge_df = run_dict['muskingum_path']
+
     merge_df = pd.read_csv(merge_df)
     merge_df['ReachCode'] = merge_df['ReachCode'].astype(int).astype(str)
 
-    out_df = pd.DataFrame(features, columns=['ReachCode', 'ave_rhp', 'min_rhp', 'el_bathymetry', 'ind_min', 'el_min', 'ind_EDAP', 'el_EDAP', 'ind_EDEP', 'el_EDEP', 'height', 'height_ind', 'vol', 'vol_norm', 'w_bottom', 'w_EDAP', 'w_min', 'w_edep', 'rh_edap', 'rh_min', 'rh_edep', 'slope_edap-min', 'slope_min-edep'])
+    out_df = pd.DataFrame(features, columns=['ReachCode', 'ave_rhp', 'min_rhp', 'el_bathymetry', 'ind_min', 'el_min', 'ind_EDAP', 'el_EDAP', 'ind_EDEP', 'el_EDEP', 'height', 'height_ind', 'vol', 'vol_scaled', 'w_bottom', 'w_EDAP', 'w_min', 'w_edep', 'rh_edap', 'rh_min', 'rh_edep', 'slope_edap-min', 'slope_min-edep'])
     merge_df = merge_df.merge(out_df, how='inner', on='ReachCode')
     os.makedirs(os.path.dirname(run_dict['analysis_path']), exist_ok=True)
-    # merge_df.to_csv(run_dict['analysis_path'], index=False)
+    merge_df.to_csv(run_dict['analysis_path'], index=False)
 
 
 if __name__ == '__main__':
-    run_path = r'/netfiles/ciroh/floodplainsData/runs/3/run_metadata_detrended.json'
+    run_path = r'/netfiles/ciroh/floodplainsData/runs/3/run_metadata.json'
     extract_features(run_path)
