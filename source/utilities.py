@@ -130,6 +130,11 @@ def reach_hydraulics(r, thiessens, elevations, slope, el_nd, resolution, bins):
     k_prime = (5 / 3) - ((2 / 3) * (1 / wrk_df['area']) * wrk_df['rh'] * p_prime)
     wrk_df['celerity'] = k_prime * (wrk_df['rh'] ** (2 / 3))
 
+    if np.all(wrk_df['area'] == 0):
+        wrk_df['el'] = np.repeat(0, len(wrk_df['el']))
+        wrk_df['rh'] = np.repeat(0, len(wrk_df['rh']))
+        wrk_df['rh_prime'] = np.repeat(0, len(wrk_df['rh_prime']))
+
     return wrk_df
 
 
