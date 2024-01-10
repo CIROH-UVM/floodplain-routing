@@ -246,6 +246,59 @@ def add_bathymetry(geom, da, slope, shape='rectangle'):
 
     return geom
 
+def map_edz(hand_path, aoi_path, reach_field, reach_data):
+    reaches = reach_data[reach_field].unique()
+    elevations = load_raster(hand_path)
+    if aoi_path[-3:] == 'tif':
+        thiessens = load_raster(aoi_path)
+    elif aoi_path[-3:] == 'shp':
+        thiessens = gage_areas_from_poly_gdal(aoi_path, reach_field, elevations, reaches=reaches)
+
+    out_data = np.zeros(elevations['data'].shape)
+    counter = 1
+    t1 = time.perf_counter()
+    for r in reaches:
+        print(f'{counter} / {len(reaches)}', end="\r")
+        tmp_reach = reach_data[reach_data[reach_field] == r]
+
+        reach_mask = (thiessens['data'] == r)
+        edz_mask = np.logical_and((elevations['data'] > tmp_reach['el_edap'].values[0]), (elevations['data'] < tmp_reach['el_edep'].values[0]))
+        combo_mask = np.logical_and(reach_mask, edz_mask)
+
+        out_data[combo_mask] = 1
+        
+        counter += 1
+
+    cols = elevations['cols']
+    rows = elevations['rows']
+    originX = elevations['origin_x']
+    originY = elevations['origin_y']
+
+    driver = gdal.GetDriverByName('GTiff')
+    out_path = os.path.join(os.path.dirname(hand_path), 'edz.tif')
+    if os.path.exists(out_path):
+        os.remove(out_path)
+    if os.path.exists(out_path):
+        os.remove(out_path + '.aux.xml')
+    outRaster = driver.Create(out_path, cols, rows, 1, gdal.GDT_Byte, options=['COMPRESS=LZW'])
+    outRaster.SetGeoTransform((originX, elevations['pixel_width'], 0, originY, 0, elevations['pixel_height']))
+    outband = outRaster.GetRasterBand(1)
+    outband.WriteArray(out_data.astype(np.int8))
+    outband.SetNoDataValue(0)
+    outRaster.SetProjection(elevations['crs'])
+    outRaster.FlushCache()
+    gdal.Dataset.__swig_destroy__(outRaster)
+    outband = outRaster = None
+    print('')
+    print(f'Completed processing in {round(time.perf_counter() - t1, 1)} seconds')
+    return out_path
+
+def merge_rasters(paths, out_path):
+    tmp_path = out_path.replace('tif', 'vrt')
+    gdal.BuildVRT(tmp_path, paths)
+    gdal.Translate(out_path, tmp_path, creationOptions=['COMPRESS=LZW'])
+
+
 def plot_rh_curve(hand_path, aoi_path, slope_path, reaches=None, max_el=10, nstages=1000, show=False, save_path=None, reach_field=None):
     elevations = load_raster(hand_path)
     slope = load_raster(slope_path)
