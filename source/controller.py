@@ -21,7 +21,7 @@ def topographic_signatures(meta_path):
     # Load reaches/basins to run
     reaches = gpd.read_file(run_dict['reach_path'], ignore_geometry=True)
     units = reaches[run_dict['unit_field']].unique()
-    units=['lamoille']
+    units = ['missisquoi']
 
     # Initialize logging
     data_dict = {f: list() for f in run_dict['fields_of_interest']}
@@ -30,7 +30,7 @@ def topographic_signatures(meta_path):
     for unit in units:
         reaches_in_unit = reaches[reaches[run_dict["unit_field"]] == unit]
         subunits = np.sort(reaches_in_unit[run_dict['subunit_field']].unique())
-        subunits=['0201']
+        subunits = ['0501']
 
         t1 = time.perf_counter()
         print(f'Unit: {unit} | Subunits: {len(subunits)}')
@@ -84,11 +84,8 @@ def batch_add_bathymetry(meta_path):
     # Clean input data
     valid_columns = set(reach_data.index)
     for col in geometry:
-        dataset = geometry[col]
-        tmp_cols = dataset.columns[(dataset != 0).any(axis=0)]
-        valid_columns = valid_columns.intersection(tmp_cols)
+        valid_columns = valid_columns.intersection(geometry[col].columns)
     valid_columns = sorted(valid_columns)
-    # valid_columns = ['4300103003055', '4300103003195', '4300103000939', '4300103000324', '4300103003071', '4300103000106', '4300103000749', '4300103002340', '4300103004093', '4300103001288', '4300103003459', '4300103003998', '4300103004141', '4300103001066', '4300103001189', '4300103000965', '4300103001512', '4300103003107', '4300103003995', '4300103005246']
 
     # Route
     counter = 1
@@ -106,6 +103,11 @@ def batch_add_bathymetry(meta_path):
         slope = tmp_meta['slope']
         length = tmp_meta['length']
         da = tmp_meta['TotDASqKm']
+        if np.all(tmp_geom['area'] == 0):
+            for i in out_dfs:
+                out_dfs[i][reach] = np.repeat(0, len(tmp_geom['area']))
+                out_dfs[i] = out_dfs[i].copy()
+            continue
 
         # Convert 3D to 2D perspective
         tmp_geom['area'] = tmp_geom['area'] / length
@@ -127,7 +129,7 @@ def batch_add_bathymetry(meta_path):
             out_dfs[i] = out_dfs[i].copy()
     
     for i in out_dfs:
-        out_dfs[i].to_csv(os.path.join(run_dict['out_directory'], f'{i}.csv'))
+        out_dfs[i].to_csv(os.path.join(run_dict['out_directory'], f'{i}.csv'), index=False)
     
     run_dict['bathymetry_added'] = True
     with open(meta_path, 'w') as f:
@@ -215,7 +217,7 @@ def make_run_template(base_directory='/path/to/data', run_id='1'):
         json.dump(run_metadata, f)
 
 if __name__ == '__main__':
-    meta_path = r'/netfiles/ciroh/floodplainsData/runs/3/run_metadata.json'
-    topographic_signatures(meta_path)
-    # batch_add_bathymetry(meta_path)
+    meta_path = r'/netfiles/ciroh/floodplainsData/runs/4/run_metadata.json'
+    # topographic_signatures(meta_path)
+    batch_add_bathymetry(meta_path)
     # map_edzs(meta_path)
