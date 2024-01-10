@@ -9,7 +9,7 @@ from osgeo import gdal, ogr
 from rasterio import features
 from scipy.ndimage import gaussian_filter1d
 # from whitebox import WhiteboxTools
-
+gdal.UseExceptions()
 
 
 def load_raster(in_path):
