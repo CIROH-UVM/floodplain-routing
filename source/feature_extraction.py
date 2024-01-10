@@ -30,6 +30,7 @@ def extract_features(run_path):
     area_path = os.path.join(working_dir, 'area.csv')
 
     reach_data = pd.read_csv(reach_path)
+    reach_data = reach_data.dropna(axis=0)
     reach_data['ReachCode'] = reach_data['ReachCode'].astype(np.int64).astype(str)
     reach_data = reach_data.set_index('ReachCode')
 
@@ -62,6 +63,7 @@ def extract_features(run_path):
     valid_reaches = valid_reaches.intersection(area_data.columns)
     valid_reaches = sorted(valid_reaches)
     # valid_reaches = ['4300103003055', '4300103003195', '4300103000939', '4300103000324', '4300103003071', '4300103000106', '4300103000749', '4300103002340', '4300103004093', '4300103001288', '4300103003459', '4300103003998', '4300103004141', '4300103001066', '4300103001189', '4300103000965', '4300103001512', '4300103003107', '4300103003995', '4300103005246']
+    valid_reaches = ['4300102005948']
 
     # Extract features
     features = list()
@@ -171,24 +173,99 @@ def extract_features(run_path):
             ax.set_ylim(0, tmp_el.max())
             ax.set_xlabel(r"$R_{h}$'")
             ax.set_ylabel('Stage (m)')
+            # fig.savefig(r'/netfiles/ciroh/floodplainsData/runs/3/outputs/feature_plots/{}.png'.format(reach))
             fig.savefig(r'/netfiles/ciroh/floodplainsData/runs/3/outputs/feature_plots/{}.png'.format(reach))
             # plt.show()
 
         features.append([reach, ave, el_bathymetry, start_el, el_argmin, stop_el, el_bathymetry_scaled, start_el_scaled, el_argmin_scaled, stop_el_scaled, height, height_scaled, vol, vol_scaled, min_val, slope_start_min, slope_min_stop, rh_bottom, rh_edap, rh_min, rh_edep, w_bottom, w_edap, w_min, w_edep])
 
     # Save
-    merge_df = run_dict['muskingum_path']
+    if os.path.exists(run_dict['muskingum_path']):
+        merge_df = run_dict['muskingum_path']
 
-    merge_df = pd.read_csv(merge_df)
-    merge_df['ReachCode'] = merge_df['ReachCode'].astype(int).astype(str)
+        merge_df = pd.read_csv(merge_df)
+        merge_df['ReachCode'] = merge_df['ReachCode'].astype(int).astype(str)
 
-    columns = ['ReachCode', 'ave_rhp', 'el_bathymetry', 'el_edap', 'el_min', 'el_edep', 'el_bathymetry_scaled', 'el_edap_scaled', 'el_min_scaled', 'el_edep_scaled', 'height', 'height_scaled', 'vol', 'vol_scaled', 'min_rhp', 'slope_start_min', 'slope_min_stop', 'rh_bottom', 'rh_edap', 'rh_min', 'rh_edep', 'w_bottom', 'w_edap', 'w_min', 'w_edep']
-    out_df = pd.DataFrame(features, columns=columns)
-    merge_df = merge_df.merge(out_df, how='inner', on='ReachCode')
+        columns = ['ReachCode', 'ave_rhp', 'el_bathymetry', 'el_edap', 'el_min', 'el_edep', 'el_bathymetry_scaled', 'el_edap_scaled', 'el_min_scaled', 'el_edep_scaled', 'height', 'height_scaled', 'vol', 'vol_scaled', 'min_rhp', 'slope_start_min', 'slope_min_stop', 'rh_bottom', 'rh_edap', 'rh_min', 'rh_edep', 'w_bottom', 'w_edap', 'w_min', 'w_edep']
+        out_df = pd.DataFrame(features, columns=columns)
+        out_df = merge_df.merge(out_df, how='inner', on='ReachCode')
+    else:
+        columns = ['ReachCode', 'ave_rhp', 'el_bathymetry', 'el_edap', 'el_min', 'el_edep', 'el_bathymetry_scaled', 'el_edap_scaled', 'el_min_scaled', 'el_edep_scaled', 'height', 'height_scaled', 'vol', 'vol_scaled', 'min_rhp', 'slope_start_min', 'slope_min_stop', 'rh_bottom', 'rh_edap', 'rh_min', 'rh_edep', 'w_bottom', 'w_edap', 'w_min', 'w_edep']
+        out_df = pd.DataFrame(features, columns=columns)
     os.makedirs(os.path.dirname(run_dict['analysis_path']), exist_ok=True)
-    merge_df.to_csv(run_dict['analysis_path'], index=False)
+    out_df.to_csv(run_dict['analysis_path'], index=False)
+
+def diagnostic(reach_code, run_path):
+    # Load data
+    with open(run_path, 'r') as f:
+        run_dict = json.loads(f.read())
+    working_dir = run_dict['out_directory']
+    reach_path = run_dict['reach_meta_path']
+    el_path = os.path.join(working_dir, 'el.csv')
+    el_scaled_path = os.path.join(working_dir, 'el_scaled.csv')
+    rh_prime_path = os.path.join(working_dir, 'rh_prime.csv')
+    rh_path = os.path.join(working_dir, 'rh.csv')
+    area_path = os.path.join(working_dir, 'area.csv')
+
+    el_data = pd.read_csv(el_path)
+    el_data = el_data.dropna(axis=1)
+    rh_data = pd.read_csv(rh_path)
+    area_data = pd.read_csv(area_path)
+
+    el_scaled_data = pd.read_csv(el_scaled_path)
+    rh_prime_data = pd.read_csv(rh_prime_path)
+
+    # plt.plot(rh_prime_data[reach_code], el_scaled_data[reach_code])
+    # plt.xlim(-1, 1)
+    # plt.savefig(os.path.join(r'/netfiles/ciroh/floodplainsData/runs/3/outputs/feature_plots', f'{reach_code}_raw.jpg'))
+
+    # Clean Rh prime
+    rh_prime_data.iloc[-1] = rh_prime_data.iloc[-2]
+    rh_prime_data[:] = gaussian_filter1d(rh_prime_data.T, 15).T
+    rh_prime_data[rh_prime_data < -3] = -3
+    rh_prime_data = rh_prime_data.dropna(axis=1)
+
+    x = rh_prime_data[reach_code]
+    y = el_scaled_data[reach_code]
+    # el = el_data[reach_code]
+    rh = rh_data[reach_code]
+    mean = x.mean()
+    y_cross = np.argmin(x > mean)
+    y_cross_2 = np.argmin(x[y_cross:] < mean) + y_cross
+    edap = y[y_cross]
+    edep = y[y_cross_2]
+
+    fig, (section_ax, rh_ax, rhp_ax) = plt.subplots(ncols=3, figsize=(10, 3), sharey=True)
+
+    length = 4646
+    width = area_data[reach_code] / length
+    width = width / 2
+    width = np.append(-width[::-1], width)
+    width = width - min(width)
+    section_el = np.append(y[::-1], y)
+    section_ax.plot(width, section_el, c='k', lw=3)
+    section_ax.fill_between([min(width), max(width)], [edep, edep], [edap, edap], fc='lightblue', alpha=0.9)
+    section_ax.set(xlim=(min(width), max(width)), ylim=(0, 5), xlabel='Station (m)', ylabel='Stage / Bankfull Depth')
+    section_ax.set_xlabel('Station (m)', fontsize=10)
+    section_ax.set_ylabel('Stage / Bankfull Depth', fontsize=10)
+    
+    rh_ax.plot(rh, y, c='k', lw=3)
+    rh_ax.fill_between([min(rh), max(rh)], [edep, edep], [edap, edap], fc='lightblue', alpha=0.9)
+    rh_ax.set(xlim=(min(rh), max(rh)), ylim=(0, 5), xlabel=' ', ylabel='Stage / Bankfull Depth')
+    rh_ax.set_xlabel(r'$R_{h}$', fontsize=10)
+
+    rhp_ax.plot(x, y, c='k', lw=3)
+    rhp_ax.axvline(mean, ls='dashed', c='k', alpha=0.7)
+    rhp_ax.fill_between([-1, 1], [edep, edep], [edap, edap], fc='lightblue', alpha=0.9)
+    rhp_ax.fill_betweenx(y[y_cross:y_cross_2], mean, x[y_cross:y_cross_2])
+    rhp_ax.set(xlim=(-1, 1), ylim=(0, 5), xlabel=' ', ylabel='Stage / Bankfull Depth')
+    rhp_ax.set_xlabel(r"$R_{h}$'", fontsize=10)
+
+    fig.tight_layout()
+    fig.savefig(os.path.join(r'/netfiles/ciroh/floodplainsData/runs/3/outputs/feature_plots', f'{reach_code}.png'), dpi=100)
 
 
 if __name__ == '__main__':
     run_path = r'/netfiles/ciroh/floodplainsData/runs/3/run_metadata.json'
-    extract_features(run_path)
+    # extract_features(run_path)
+    diagnostic('4300108007142', run_path)
