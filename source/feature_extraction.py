@@ -63,7 +63,6 @@ def extract_features(run_path):
     valid_reaches = valid_reaches.intersection(area_data.columns)
     valid_reaches = sorted(valid_reaches)
     # valid_reaches = ['4300103003055', '4300103003195', '4300103000939', '4300103000324', '4300103003071', '4300103000106', '4300103000749', '4300103002340', '4300103004093', '4300103001288', '4300103003459', '4300103003998', '4300103004141', '4300103001066', '4300103001189', '4300103000965', '4300103001512', '4300103003107', '4300103003995', '4300103005246']
-    valid_reaches = ['4300102005948']
 
     # Extract features
     features = list()
@@ -139,43 +138,35 @@ def extract_features(run_path):
         w_min = tmp_area[argmin]
         w_edep = tmp_area[stop]
 
-        plot = False
+        plot = True
         if plot:
-            fig, ax = plt.subplots()
+            fig, (section_ax, rh_ax, rhp_ax) = plt.subplots(ncols=3, figsize=(10, 3), sharey=True)
 
-            # Plot features
-            ax.scatter(min_val, el_argmin, ec='r', fc='none', s=25)
-            ax.text(min_val, el_argmin, 'Min', va='top', ha='right')
+            tmp_area = tmp_area / 2
+            tmp_area = np.append(-tmp_area[::-1], tmp_area)
+            tmp_area = tmp_area - min(tmp_area)
+            section_el = np.append(tmp_el_scaled[::-1], tmp_el_scaled)
+            section_ax.plot(tmp_area, section_el, c='k', lw=3)
+            section_ax.fill_between([min(tmp_area), max(tmp_area)], [stop_el_scaled, stop_el_scaled], [start_el_scaled, start_el_scaled], fc='lightblue', alpha=0.9)
+            section_ax.set(xlim=(min(tmp_area), max(tmp_area)), ylim=(0, 5), xlabel='Station (m)', ylabel='Stage / Bankfull Depth')
+            section_ax.set_xlabel('Station (m)', fontsize=10)
+            section_ax.set_ylabel('Stage / Bankfull Depth', fontsize=10)
+            
+            rh_ax.plot(tmp_rh, tmp_el_scaled, c='k', lw=3)
+            rh_ax.fill_between([min(tmp_rh), max(tmp_rh)], [stop_el_scaled, stop_el_scaled], [start_el_scaled, start_el_scaled], fc='lightblue', alpha=0.9)
+            rh_ax.set(xlim=(min(tmp_rh), max(tmp_rh)), ylim=(0, 5), xlabel=' ', ylabel='Stage / Bankfull Depth')
+            rh_ax.set_xlabel(r'$R_{h}$', fontsize=10)
 
-            ax.axvline(ave, c='r', ls='dashed', lw=1)
-            ax.text(ave, tmp_el.max(), 'Average', va='top', ha='right', rotation=90)
+            rhp_ax.plot(tmp_rh_prime, tmp_el_scaled, c='k', lw=3)
+            rhp_ax.axvline(ave, ls='dashed', c='k', alpha=0.7)
+            rhp_ax.fill_between([-1, 1], [stop_el_scaled, stop_el_scaled], [start_el_scaled, start_el_scaled], fc='lightblue', alpha=0.9)
+            rhp_ax.fill_betweenx(tmp_el_scaled[start:stop], ave, tmp_rh_prime[start:stop])
+            rhp_ax.set(xlim=(-1, 1), ylim=(0, 5), xlabel=' ', ylabel='Stage / Bankfull Depth')
+            rhp_ax.set_xlabel(r"$R_{h}$'", fontsize=10)
 
-            ax.axhline(start_el, c='r', ls='dotted', lw=1)
-            ax.text(-3, start_el, 'EDAP', va='bottom', ha='left')
-
-            ax.axhline(el_bathymetry, c='r', ls='dotted', lw=1)
-            ax.text(-3, el_bathymetry, 'Bathymetry', va='bottom', ha='left')
-
-            ax.axhline(stop_el, c='r', ls='dotted', lw=1)
-            ax.text(-3, stop_el, 'EDEP', va='bottom', ha='left')
-
-            ax.fill_betweenx(tmp_el[start:stop], tmp_rh_prime[start:stop], np.repeat(ave, stop - start), fc='r')
-            ax.text((min_val + ave) / 2, (tmp_el[start] + tmp_el[stop]) / 2, 'volume', va='center', ha='center')
-
-            ax.text(ave, (tmp_el[start] + tmp_el[stop]) / 2, 'height ED', va='center', ha='left', rotation=90)
-
-            # ax.plot(p(tmp_el), tmp_el, ls='dashed', c='gray')
-
-            ax.plot(tmp_rh_prime, tmp_el, c='k')
-
-            plt.title(reach)
-            ax.set_xlim(-3, 1)
-            ax.set_ylim(0, tmp_el.max())
-            ax.set_xlabel(r"$R_{h}$'")
-            ax.set_ylabel('Stage (m)')
-            # fig.savefig(r'/netfiles/ciroh/floodplainsData/runs/3/outputs/feature_plots/{}.png'.format(reach))
-            fig.savefig(r'/netfiles/ciroh/floodplainsData/runs/3/outputs/feature_plots/{}.png'.format(reach))
-            # plt.show()
+            fig.tight_layout()
+            fig.savefig(os.path.join(run_dict['out_directory'], 'feature_plots', f'{reach}.png'), dpi=100)
+            plt.close()
 
         features.append([reach, ave, el_bathymetry, start_el, el_argmin, stop_el, el_bathymetry_scaled, start_el_scaled, el_argmin_scaled, stop_el_scaled, height, height_scaled, vol, vol_scaled, min_val, slope_start_min, slope_min_stop, rh_bottom, rh_edap, rh_min, rh_edep, w_bottom, w_edap, w_min, w_edep])
 
@@ -267,5 +258,5 @@ def diagnostic(reach_code, run_path):
 
 if __name__ == '__main__':
     run_path = r'/netfiles/ciroh/floodplainsData/runs/3/run_metadata.json'
-    # extract_features(run_path)
-    diagnostic('4300108007142', run_path)
+    extract_features(run_path)
+    # diagnostic('4300108007142', run_path)
