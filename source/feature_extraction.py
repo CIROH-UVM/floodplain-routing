@@ -17,10 +17,12 @@ def scale_stage(reach_data, el_data):
     el_scaled_data.iloc[:, 0] = el_data.iloc[:, 0]
     return el_scaled_data
 
-def extract_features(run_path):
+def extract_features(run_path, plot=False):
     # Load data
     with open(run_path, 'r') as f:
         run_dict = json.loads(f.read())
+    if plot:
+        os.makedirs(os.path.join(run_dict['out_directory'], 'feature_plots'), exist_ok=True)
     working_dir = run_dict['out_directory']
     reach_path = run_dict['reach_meta_path']
     el_path = os.path.join(working_dir, 'el.csv')
@@ -84,6 +86,7 @@ def extract_features(run_path):
         ave = np.nanmean(tmp_rh_prime)
 
         le_ave = (tmp_rh_prime < ave)
+        le_ave[:bathymetry_break] = False  # Enforce channel not being included in EDZ comparisons
         transitions = le_ave[:-1] != le_ave[1:]
         runs = np.cumsum(transitions)
         runs = np.insert(runs, 0, runs[0])
@@ -138,7 +141,6 @@ def extract_features(run_path):
         w_min = tmp_area[argmin]
         w_edep = tmp_area[stop]
 
-        plot = True
         if plot:
             fig, (section_ax, rh_ax, rhp_ax) = plt.subplots(ncols=3, figsize=(10, 3), sharey=True)
 
@@ -257,6 +259,6 @@ def diagnostic(reach_code, run_path):
 
 
 if __name__ == '__main__':
-    run_path = r'/netfiles/ciroh/floodplainsData/runs/3/run_metadata.json'
-    extract_features(run_path)
+    run_path = r'/netfiles/ciroh/floodplainsData/runs/4/run_metadata.json'
+    extract_features(run_path, plot=True)
     # diagnostic('4300108007142', run_path)
