@@ -21,7 +21,6 @@ def topographic_signatures(meta_path):
     # Load reaches/basins to run
     reaches = gpd.read_file(run_dict['reach_path'], ignore_geometry=True)
     units = reaches[run_dict['unit_field']].unique()
-    units = ['missisquoi']
 
     # Initialize logging
     data_dict = {f: list() for f in run_dict['fields_of_interest']}
@@ -30,7 +29,6 @@ def topographic_signatures(meta_path):
     for unit in units:
         reaches_in_unit = reaches[reaches[run_dict["unit_field"]] == unit]
         subunits = np.sort(reaches_in_unit[run_dict['subunit_field']].unique())
-        subunits = ['0501']
 
         t1 = time.perf_counter()
         print(f'Unit: {unit} | Subunits: {len(subunits)}')
@@ -121,8 +119,10 @@ def batch_add_bathymetry(meta_path):
         tmp_geom['p'] = tmp_geom['p'] * length
 
         tmp_geom['rh'] = tmp_geom['vol'] / tmp_geom['p']
+        tmp_geom['rh'] = np.nan_to_num(tmp_geom['rh'])
         tmp_geom['rh_prime'] = (tmp_geom['rh'][1:] - tmp_geom['rh'][:-1]) / (tmp_geom['el'][1:] - tmp_geom['el'][:-1])
         tmp_geom['rh_prime'] = np.append(tmp_geom['rh_prime'], tmp_geom['rh_prime'][-1])
+        tmp_geom['rh_prime'] = np.nan_to_num(tmp_geom['rh_prime'])
 
         for i in out_dfs:
             out_dfs[i][reach] = tmp_geom[i]
@@ -218,6 +218,6 @@ def make_run_template(base_directory='/path/to/data', run_id='1'):
 
 if __name__ == '__main__':
     meta_path = r'/netfiles/ciroh/floodplainsData/runs/4/run_metadata.json'
-    # topographic_signatures(meta_path)
+    topographic_signatures(meta_path)
     batch_add_bathymetry(meta_path)
     # map_edzs(meta_path)

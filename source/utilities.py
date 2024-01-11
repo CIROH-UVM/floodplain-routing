@@ -125,6 +125,7 @@ def reach_hydraulics(r, thiessens, elevations, slope, el_nd, resolution, bins):
     wrk_df['vol'] = np.cumsum(vol_increase)
     wrk_df['rh'] = wrk_df['vol'] / wrk_df['p']
     wrk_df['rh_prime'] = (wrk_df['rh'].shift(-1) - wrk_df['rh']) / depth_change
+    wrk_df['rh_prime'] = np.nan_to_num(wrk_df['rh_prime'])
     
     p_prime = (wrk_df['p'].shift(-1) - wrk_df['p']) / depth_change
     k_prime = (5 / 3) - ((2 / 3) * (1 / wrk_df['area']) * wrk_df['rh'] * p_prime)
