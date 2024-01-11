@@ -108,6 +108,8 @@ def clip_to_study_area(gdb_path, run_dict):
 
     print('Generating reach metadata table')
     meta = meta[meta['ReachCode'].isin(nhd['MergeCode'].unique())]
+    meta = meta.merge(nhd[['MergeCode', 'Code_name']], how='left', left_on='ReachCode', right_on='MergeCode')
+    meta = meta.drop('MergeCode', axis=1)
     meta.to_csv(run_dict['reach_meta_path'], index=False)
 
 def run_all(meta_path, update_metadata=True):
@@ -134,5 +136,5 @@ def run_all(meta_path, update_metadata=True):
 
 
 if __name__ == '__main__':
-    meta_path = r'/netfiles/ciroh/floodplainsData/runs/3/run_metadata.json'
+    meta_path = r'/netfiles/ciroh/floodplainsData/runs/4/run_metadata.json'
     run_all(meta_path)
