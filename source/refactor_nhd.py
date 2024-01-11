@@ -108,23 +108,14 @@ def clip_to_study_area(gdb_path, run_dict):
 
     print('Generating reach metadata table')
     meta = meta[meta['ReachCode'].isin(nhd['MergeCode'].unique())]
-    meta = meta.merge(nhd[['MergeCode', 'Code_name']], how='left', left_on='ReachCode', right_on='MergeCode')
-    meta = meta.drop('MergeCode', axis=1)
+    subunits = nhd[['MergeCode', 'Code_name']].drop_duplicates().rename(columns={'MergeCode': 'ReachCode'})
+    meta = meta.merge(subunits, how='left', on='ReachCode')
     meta.to_csv(run_dict['reach_meta_path'], index=False)
 
-def run_all(meta_path, update_metadata=True):
+def run_all(meta_path):
     # Load run config and initialize directory structure
     with open(meta_path, 'r') as f:
         run_dict = json.loads(f.read())
-    if update_metadata:
-        run_dict['network_directory'] = os.path.join(run_dict['run_directory'], 'network')
-        run_dict['network_db_path'] = os.path.join(run_dict['network_directory'], 'vaa.db')
-        run_dict['reach_path'] = os.path.join(run_dict['network_directory'], 'catchments.shp')
-        run_dict['flowline_path'] = os.path.join(run_dict['network_directory'], 'flowlines.shp')
-        run_dict['reach_meta_path'] = os.path.join(run_dict['network_directory'], 'reach_data.csv')
-        with open(meta_path, 'w') as f:
-            json.dump(run_dict, f)
-    os.makedirs(run_dict['network_directory'], exist_ok=True)
 
     gdb_path = download_data(run_dict)
     merge_reaches(gdb_path, run_dict)

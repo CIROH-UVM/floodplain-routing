@@ -58,10 +58,10 @@ def topographic_signatures(meta_path):
         print('='*50)
 
     print('Saving data')
-    os.makedirs(run_dict['out_directory'], exist_ok=True)
+    os.makedirs(run_dict['geometry_directory'], exist_ok=True)
     for f in run_dict['fields_of_interest']:
         data_dict[f] = pd.concat(data_dict[f], axis=1)
-        data_dict[f].to_csv(os.path.join(run_dict['out_directory'], f'{f}.csv'), index=False)
+        data_dict[f].to_csv(os.path.join(run_dict['geometry_directory'], f'{f}.csv'), index=False)
     print('Finished saving')
 
 def batch_add_bathymetry(meta_path):
@@ -70,10 +70,10 @@ def batch_add_bathymetry(meta_path):
         run_dict = json.load(f)
 
     # Import data
-    geometry = {'el': pd.read_csv(os.path.join(run_dict['out_directory'], 'el.csv')),
-                'area': pd.read_csv(os.path.join(run_dict['out_directory'], 'area.csv')),
-                'vol': pd.read_csv(os.path.join(run_dict['out_directory'], 'vol.csv')),
-                'p': pd.read_csv(os.path.join(run_dict['out_directory'], 'p.csv'))}
+    geometry = {'el': pd.read_csv(os.path.join(run_dict['geometry_directory'], 'el.csv')),
+                'area': pd.read_csv(os.path.join(run_dict['geometry_directory'], 'area.csv')),
+                'vol': pd.read_csv(os.path.join(run_dict['geometry_directory'], 'vol.csv')),
+                'p': pd.read_csv(os.path.join(run_dict['geometry_directory'], 'p.csv'))}
     reach_data = pd.read_csv(run_dict['reach_meta_path'])
     reach_data = reach_data.dropna(subset=['ReachCode'])
     reach_data['ReachCode'] = reach_data['ReachCode'].astype(np.int64).astype(str)
@@ -129,9 +129,8 @@ def batch_add_bathymetry(meta_path):
             out_dfs[i] = out_dfs[i].copy()
     
     for i in out_dfs:
-        out_dfs[i].to_csv(os.path.join(run_dict['out_directory'], f'{i}.csv'), index=False)
+        out_dfs[i].to_csv(os.path.join(run_dict['geometry_directory'], f'{i}.csv'), index=False)
     
-    run_dict['bathymetry_added'] = True
     with open(meta_path, 'w') as f:
         json.dump(run_dict, f)
 
@@ -186,7 +185,7 @@ def map_edzs(meta_path):
             reach_data['el_edep'] = reach_data['el_edep'] - reaches_in_subunit['el_bathymetry']
             reach_data[run_dict["id_field"]] = reaches_in_subunit['ReachCode']
 
-            # out_raster_path = map_edz(hand_path, run_dict["reach_path"], run_dict["id_field"], reach_data)
+            out_raster_path = map_edz(hand_path, run_dict["reach_path"], run_dict["id_field"], reach_data)
 
             out_raster_path = os.path.join(os.path.dirname(hand_path), 'edz.tif')
             out_paths.append(out_raster_path)
@@ -194,30 +193,55 @@ def map_edzs(meta_path):
         print(f'Completed processing {unit} in {round((time.perf_counter() - t1) / 60, 1)} minutes')
         print('='*50)
 
-    merge_rasters(out_paths, os.path.join(os.path.dirname(run_dict['analysis_path']), 'edz.tif'))
-
-
+    merge_rasters(out_paths, run_dict['edz_path'])
 
 
 def make_run_template(base_directory='/path/to/data', run_id='1'):
-    run_metadata = {'data_directory': base_directory,
-                    'run_directory': os.path.join(base_directory, 'runs', run_id), 
-                    'out_directory': os.path.join(base_directory, 'runs', run_id, 'outputs'), 
-                    'reach_path': os.path.join(base_directory, 'runs', run_id, 'catchments.shp'),
-                    'reach_meta_path': os.path.join(base_directory, 'runs', run_id, 'reach_data.csv'), 
-                    'id_field': 'MergeCode', 
-                    'unit_field': '8_name',
-                    'subunit_field': '12_code',
-                    'fields_of_interest': ['area', 'el', 'p', 'rh', 'rh_prime', 'vol'], 
-                    'scaled_stages': True,
-                    'bathymetry_added': False}
-    os.makedirs(run_metadata['run_directory'], exists_ok=True)
+    run_metadata = {
+        "data_directory": base_directory,
+        "run_directory": os.path.join(base_directory, 'runs', run_id),
+
+        "analysis_directory": os.path.join(base_directory, 'runs', run_id, 'analysis'),
+        "analysis_path": os.path.join(base_directory, 'runs', run_id, 'analysis', 'data.csv'),
+        "edz_path": os.path.join(base_directory, 'runs', run_id, 'analysis', 'edz.tif'),
+
+        "muskingum_directory": os.path.join(base_directory, 'runs', run_id, 'muskingum-cunge'),
+        "muskingum_path": os.path.join(base_directory, 'runs', run_id, 'muskingum-cunge', 'mc_data.csv'),
+        "muskingum_diagnostics": os.path.join(base_directory, 'runs', run_id, 'muskingum-cunge', 'diagnostics'),
+
+        "network_directory": os.path.join(base_directory, 'runs', run_id, 'network'),
+        "network_db_path": os.path.join(base_directory, 'runs', run_id, 'network', 'vaa.db'),
+        "reach_path": os.path.join(base_directory, 'runs', run_id, 'network', 'catchments.shp'),
+        "flowline_path": os.path.join(base_directory, 'runs', run_id, 'network', 'flowlines.shp'),
+        "reach_meta_path": os.path.join(base_directory, 'runs', run_id, 'network', 'reach_data.csv'),
+
+        "geometry_directory": os.path.join(base_directory, 'runs', run_id, 'geometry'),
+        "geometry_diagnostics": os.path.join(base_directory, 'runs', run_id, 'geometry', 'diagnostics'),
+
+        "id_field": "MergeCode",
+        "unit_field": "8_name",
+        "subunit_field": "12_code",
+        "fields_of_interest": ['area', 'el', 'p', 'rh', 'rh_prime', 'vol'],
+        "scaled_stages": True,
+        "huc4": "0430",
+        "subunit_path": os.path.join(base_directory,'shared', 'subunits.shp'),
+        }
+
+    for key in run_metadata:
+        path = str(run_metadata[key])
+        if not base_directory in path:
+            continue
+        last = os.path.split(path)[-1]
+        if '.' in last:
+            continue
+        os.makedirs(run_metadata[key], exist_ok=True)
     meta_path = os.path.join(run_metadata['run_directory'], 'run_metadata.json')
     with open(meta_path, 'w') as f:
         json.dump(run_metadata, f)
 
 if __name__ == '__main__':
-    meta_path = r'/netfiles/ciroh/floodplainsData/runs/4/run_metadata.json'
-    topographic_signatures(meta_path)
-    batch_add_bathymetry(meta_path)
+    make_run_template(r'/netfiles/ciroh/floodplainsData', 'template')
+    # meta_path = r'/netfiles/ciroh/floodplainsData/runs/4/run_metadata.json'
+    # topographic_signatures(meta_path)
+    # batch_add_bathymetry(meta_path)
     # map_edzs(meta_path)

@@ -303,6 +303,7 @@ def merge_rasters(paths, out_path):
     tmp_path = out_path.replace('tif', 'vrt')
     gdal.BuildVRT(tmp_path, paths)
     gdal.Translate(out_path, tmp_path, creationOptions=['COMPRESS=LZW'])
+    os.remove(tmp_path)
 
 
 def plot_rh_curve(hand_path, aoi_path, slope_path, reaches=None, max_el=10, nstages=1000, show=False, save_path=None, reach_field=None):

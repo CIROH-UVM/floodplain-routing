@@ -21,9 +21,7 @@ def extract_features(run_path, plot=False):
     # Load data
     with open(run_path, 'r') as f:
         run_dict = json.loads(f.read())
-    if plot:
-        os.makedirs(os.path.join(run_dict['out_directory'], 'feature_plots'), exist_ok=True)
-    working_dir = run_dict['out_directory']
+    working_dir = run_dict['geometry_directory']
     reach_path = run_dict['reach_meta_path']
     el_path = os.path.join(working_dir, 'el.csv')
     el_scaled_path = os.path.join(working_dir, 'el_scaled.csv')
@@ -64,7 +62,7 @@ def extract_features(run_path, plot=False):
     valid_reaches = valid_reaches.intersection(rh_prime_data.columns)
     valid_reaches = valid_reaches.intersection(area_data.columns)
     valid_reaches = sorted(valid_reaches)
-    # valid_reaches = ['4300103003055', '4300103003195', '4300103000939', '4300103000324', '4300103003071', '4300103000106', '4300103000749', '4300103002340', '4300103004093', '4300103001288', '4300103003459', '4300103003998', '4300103004141', '4300103001066', '4300103001189', '4300103000965', '4300103001512', '4300103003107', '4300103003995', '4300103005246']
+    valid_reaches = ['4300102002132']
 
     # Extract features
     features = list()
@@ -78,12 +76,24 @@ def extract_features(run_path, plot=False):
         tmp_rh_prime = rh_prime_data[reach].to_numpy()
         tmp_area = area_data[reach].to_numpy() / tmp_meta['length']
 
+        # Error handling
+        if np.all(tmp_area == 0):
+            if plot:
+                fig, ax = plt.subplots(figsize=(10, 3))
+                ax.text(0.5, 0.5, 'NO GEOMETRY', fontsize=15, verticalalignment='center', horizontalalignment='center')
+                fig.savefig(os.path.join(run_dict['geometry_diagnostics'], f'{reach}.png'), dpi=100)
+                plt.close()
+            features.append([reach, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1])
+            continue
+
         # Process
         bathymetry_break = np.argmax(tmp_area > tmp_area[0])
         el_bathymetry = tmp_el[bathymetry_break]
         el_bathymetry_scaled = tmp_el_scaled[bathymetry_break]
 
-        ave = np.nanmean(tmp_rh_prime)
+        ave = np.nanmean(tmp_rh_prime[bathymetry_break:])
+        stdev = np.nanstd(tmp_rh_prime[bathymetry_break:])
+        ave -= stdev
 
         le_ave = (tmp_rh_prime < ave)
         le_ave[:bathymetry_break] = False  # Enforce channel not being included in EDZ comparisons
@@ -167,23 +177,22 @@ def extract_features(run_path, plot=False):
             rhp_ax.set_xlabel(r"$R_{h}$'", fontsize=10)
 
             fig.tight_layout()
-            fig.savefig(os.path.join(run_dict['out_directory'], 'feature_plots', f'{reach}.png'), dpi=100)
+            fig.savefig(os.path.join(run_dict['geometry_diagnostics'], f'{reach}.png'), dpi=100)
             plt.close()
 
-        features.append([reach, ave, el_bathymetry, start_el, el_argmin, stop_el, el_bathymetry_scaled, start_el_scaled, el_argmin_scaled, stop_el_scaled, height, height_scaled, vol, vol_scaled, min_val, slope_start_min, slope_min_stop, rh_bottom, rh_edap, rh_min, rh_edep, w_bottom, w_edap, w_min, w_edep])
+        features.append([reach, ave, el_bathymetry, start_el, el_argmin, stop_el, el_bathymetry_scaled, start_el_scaled, el_argmin_scaled, stop_el_scaled, height, height_scaled, vol, vol_scaled, min_val, slope_start_min, slope_min_stop, rh_bottom, rh_edap, rh_min, rh_edep, w_bottom, w_edap, w_min, w_edep, 0])
 
     # Save
+    columns = ['ReachCode', 'ave_rhp', 'el_bathymetry', 'el_edap', 'el_min', 'el_edep', 'el_bathymetry_scaled', 'el_edap_scaled', 'el_min_scaled', 'el_edep_scaled', 'height', 'height_scaled', 'vol', 'vol_scaled', 'min_rhp', 'slope_start_min', 'slope_min_stop', 'rh_bottom', 'rh_edap', 'rh_min', 'rh_edep', 'w_bottom', 'w_edap', 'w_min', 'w_edep', 'invalid_geometry']
     if os.path.exists(run_dict['muskingum_path']):
         merge_df = run_dict['muskingum_path']
 
         merge_df = pd.read_csv(merge_df)
         merge_df['ReachCode'] = merge_df['ReachCode'].astype(int).astype(str)
 
-        columns = ['ReachCode', 'ave_rhp', 'el_bathymetry', 'el_edap', 'el_min', 'el_edep', 'el_bathymetry_scaled', 'el_edap_scaled', 'el_min_scaled', 'el_edep_scaled', 'height', 'height_scaled', 'vol', 'vol_scaled', 'min_rhp', 'slope_start_min', 'slope_min_stop', 'rh_bottom', 'rh_edap', 'rh_min', 'rh_edep', 'w_bottom', 'w_edap', 'w_min', 'w_edep']
         out_df = pd.DataFrame(features, columns=columns)
         out_df = merge_df.merge(out_df, how='inner', on='ReachCode')
     else:
-        columns = ['ReachCode', 'ave_rhp', 'el_bathymetry', 'el_edap', 'el_min', 'el_edep', 'el_bathymetry_scaled', 'el_edap_scaled', 'el_min_scaled', 'el_edep_scaled', 'height', 'height_scaled', 'vol', 'vol_scaled', 'min_rhp', 'slope_start_min', 'slope_min_stop', 'rh_bottom', 'rh_edap', 'rh_min', 'rh_edep', 'w_bottom', 'w_edap', 'w_min', 'w_edep']
         out_df = pd.DataFrame(features, columns=columns)
     os.makedirs(os.path.dirname(run_dict['analysis_path']), exist_ok=True)
     out_df.to_csv(run_dict['analysis_path'], index=False)
@@ -192,7 +201,7 @@ def diagnostic(reach_code, run_path):
     # Load data
     with open(run_path, 'r') as f:
         run_dict = json.loads(f.read())
-    working_dir = run_dict['out_directory']
+    working_dir = run_dict['geometry_directory']
     reach_path = run_dict['reach_meta_path']
     el_path = os.path.join(working_dir, 'el.csv')
     el_scaled_path = os.path.join(working_dir, 'el_scaled.csv')
@@ -255,7 +264,7 @@ def diagnostic(reach_code, run_path):
     rhp_ax.set_xlabel(r"$R_{h}$'", fontsize=10)
 
     fig.tight_layout()
-    fig.savefig(os.path.join(r'/netfiles/ciroh/floodplainsData/runs/3/outputs/feature_plots', f'{reach_code}.png'), dpi=100)
+    fig.savefig(os.path.join(run_dict['geometry_diagnostics'], f'{reach_code}.png'), dpi=100)
 
 
 if __name__ == '__main__':
