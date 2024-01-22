@@ -454,3 +454,104 @@ def generate_geomorphons(raster_dir, working_dir):
 
     print(f' - geomorphon reclassed and cleaned in {round(time.perf_counter() - tstart, 1)} seconds')
 
+def reclass_geomorphons_channel(subbasin, thalweg_path, subbasin_path):
+    geomorphon_path = os.path.join(subbasin, 'rasters', 'geomorphon_clean.tif')
+    geomorphon_poly_path = os.path.join(subbasin, 'shapefiles', 'geomorphon.shp')
+    geomorphon_reclass_path = os.path.join(subbasin, 'rasters', 'geomorphon_clean_reclass_2.tif')
+
+    # Polygonize
+    polygonize = True
+    if polygonize:
+        print('polygonizing')
+        dataset = gdal.Open(geomorphon_path)
+        band = dataset.GetRasterBand(1)
+        crs = dataset.GetProjectionRef()
+        srs = ogr.osr.SpatialReference()
+        srs.ImportFromWkt(crs)
+
+        poly_ds = ogr.GetDriverByName('ESRI Shapefile').CreateDataSource(geomorphon_poly_path)
+        poly_layer = poly_ds.CreateLayer('geomorphon', srs=srs)
+        field_def = ogr.FieldDefn('gmorph_cls', ogr.OFTInteger)
+        poly_layer.CreateField(field_def)
+
+        gdal.Polygonize(band, None, poly_layer, 0, [])
+        poly_ds = None
+
+    # Intersect with thalweg
+    intersect = True
+    if intersect:
+        print('intersecting')
+        polys = gpd.read_file(geomorphon_poly_path)
+        polys = polys.query('gmorph_cls > 0').copy()
+        polys['PID'] = polys.index.to_list()
+        _ = polys.total_bounds
+        thalweg = gpd.read_file(thalweg_path, bbox=polys)
+        thalweg = thalweg[['geometry']]
+        concaves = polys.query('gmorph_cls == 3')
+        intersects = concaves.geometry.map(lambda x: x.intersects(thalweg.geometry).any())
+        tmp_df = pd.DataFrame({'PID': concaves['PID'], 'channel': intersects})
+        polys = polys.merge(tmp_df, how='left', on='PID')
+        polys['channel'] = polys['channel'].fillna(0)
+        polys.to_file(geomorphon_poly_path)
+        polys = None
+        thalweg = None
+    
+    # Process largest
+    geoprocess = True
+    if geoprocess:
+        print('geoprocessing')
+        polys = gpd.read_file(geomorphon_poly_path)
+        polys = polys.query('gmorph_cls > 0')
+        _ = polys.total_bounds
+        subbasins = gpd.read_file(subbasin_path, bbox=polys)
+        subbasins = subbasins[['geometry', 'MergedCode']]
+        subbasins = subbasins.dissolve(by='MergedCode')
+        subbasins['Code'] = subbasins.index.to_list()
+        polys = polys.overlay(subbasins, how='intersection')
+        polys['PID'] = polys.index.to_list()
+        polys['area'] = polys.geometry.area
+        concaves = polys.query('gmorph_cls == 3')
+        group = concaves.groupby('Code')
+        max_rows = group['area'].transform(max) == concaves['area']
+        max_area = np.zeros(len(concaves))
+        max_area[max_rows] = 1
+        tmp_df = pd.DataFrame({'PID': concaves['PID'], 'largest_area': max_area})
+        print(len(polys))
+        polys = polys.merge(tmp_df, how='left', on='PID')
+        polys['largest_area'] = polys['largest_area'].fillna(0)
+        print(len(polys))
+        polys.to_file(geomorphon_poly_path)
+
+    # Reclassify channel to class_4
+    reclassify = True
+    if reclassify:
+        print('reclassifying')
+        polys = gpd.read_file(geomorphon_poly_path)
+        tmp_classes = polys['gmorph_cls'].to_numpy()
+        tmp_classes[polys['channel'] == "1"] = 4
+        polys['gmorph_cls'] = tmp_classes
+        polys.to_file(geomorphon_poly_path)
+
+    # Re-rasterize
+    rasterize = True
+    if rasterize:
+        print('rasterizing')
+        subunits = ogr.Open(geomorphon_poly_path)
+        subunits_layer = subunits.GetLayer()
+
+        template_raster = load_raster(geomorphon_path)
+        
+        nd_value = 0
+        target_ds = gdal.GetDriverByName('MEM').Create('', template_raster['cols'], template_raster['rows'], 1, gdal.GDT_Byte)
+
+        target_ds.SetGeoTransform((template_raster['origin_x'], template_raster['pixel_width'], 0, template_raster['origin_y'], 0, template_raster['pixel_height']))
+        band = target_ds.GetRasterBand(1)
+        target_ds.SetProjection(template_raster['crs'])
+        band.SetNoDataValue(nd_value)
+
+        id_field = 'gmorph_cls'
+        options = [f"ATTRIBUTE={id_field}", "outputType=gdal.GDT_Int64", f"noData={nd_value}", f"initValues={nd_value}"]
+        gdal.RasterizeLayer(target_ds, [1], subunits_layer, options=options)
+
+        gdal.Translate(geomorphon_reclass_path, target_ds)
+

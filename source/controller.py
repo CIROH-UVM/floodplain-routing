@@ -4,7 +4,7 @@ import pandas as pd
 import geopandas as gpd
 import numpy as np
 import json
-from utilities import subunit_hydraulics, generate_geomorphons, add_bathymetry, map_edz, merge_rasters
+from utilities import subunit_hydraulics, generate_geomorphons, add_bathymetry, map_edz, merge_rasters, reclass_geomorphons_channel
 
 
 def topographic_signatures(meta_path):
@@ -135,15 +135,21 @@ def batch_add_bathymetry(meta_path):
         json.dump(run_dict, f)
 
 def batch_geomorphons(working_directory):
-    run_list = ['MSQ_0105']
+    run_list = ['WIN_0504']
     unit_dict = {'WIN': 'winooski', 'OTR': 'otter', 'LKC': 'champlain', 'MSQ': 'missisquoi'}
     for run in run_list:
         print(f'Running basin {run}')
         tstart = time.perf_counter()
         unit = unit_dict[run[:3]]
         subunit = run[-4:]
-        tmp_dir = os.path.join(working_directory, unit, 'subbasins', subunit, 'rasters')
-        generate_geomorphons(tmp_dir, working_directory)
+        raster_dir = os.path.join(working_directory, unit, 'subbasins', subunit, 'rasters')
+        # generate_geomorphons(raster_dir, working_directory)
+
+        subbasin_dir = os.path.join(working_directory, unit, 'subbasins', subunit)
+        flowlines = r'/netfiles/ciroh/floodplainsData/shared/legacy_NHD/thalwegs_nhd.shp'
+        catchments = r'/netfiles/ciroh/floodplainsData/shared/legacy_NHD/reaches.shp'
+        reclass_geomorphons_channel(subbasin_dir, flowlines, catchments)
+
         print(f'Finished in {round((time.perf_counter() - tstart) / 60), 1} minutes')
         print('='*25)
 
@@ -240,8 +246,10 @@ def make_run_template(base_directory='/path/to/data', run_id='1'):
         json.dump(run_metadata, f)
 
 if __name__ == '__main__':
-    make_run_template(r'/netfiles/ciroh/floodplainsData', 'template')
+    # make_run_template(r'/netfiles/ciroh/floodplainsData', '4')
     # meta_path = r'/netfiles/ciroh/floodplainsData/runs/4/run_metadata.json'
     # topographic_signatures(meta_path)
     # batch_add_bathymetry(meta_path)
     # map_edzs(meta_path)
+
+    batch_geomorphons(r'/netfiles/ciroh/floodplainsData')
