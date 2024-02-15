@@ -6,6 +6,10 @@ from scipy.ndimage import gaussian_filter1d
 import matplotlib.pyplot as plt
 import json
 
+# Load regressions
+with open('source/regressions.json') as in_file:
+    REGRESSIONS = json.load(in_file)
+
 def scale_stage(reach_data, el_data):
     # el_data = el_data.iloc[:, 1:]
     el_scaled_data = el_data.copy()
@@ -28,6 +32,7 @@ def extract_features(run_path, plot=False):
     rh_path = os.path.join(working_dir, 'rh.csv')
     rh_prime_path = os.path.join(working_dir, 'rh_prime.csv')
     area_path = os.path.join(working_dir, 'area.csv')
+    volume_path = os.path.join(working_dir, 'vol.csv')
 
     reach_data = pd.read_csv(reach_path)
     reach_data = reach_data.dropna(axis=0)
@@ -55,14 +60,17 @@ def extract_features(run_path, plot=False):
     area_data = pd.read_csv(area_path)
     area_data = area_data.dropna(axis=1)
 
+    volume_data = pd.read_csv(volume_path)
+    volume_data = volume_data.dropna(axis=1)
+
     # Get reaches
     valid_reaches = set(reach_data.index.tolist())
     valid_reaches = valid_reaches.intersection(el_data.columns)
     valid_reaches = valid_reaches.intersection(rh_data.columns)
     valid_reaches = valid_reaches.intersection(rh_prime_data.columns)
     valid_reaches = valid_reaches.intersection(area_data.columns)
+    valid_reaches = valid_reaches.intersection(volume_data.columns)
     valid_reaches = sorted(valid_reaches)
-    valid_reaches = ['4300102002132']
 
     # Extract features
     features = list()
@@ -75,6 +83,7 @@ def extract_features(run_path, plot=False):
         tmp_rh = rh_data[reach].to_numpy()
         tmp_rh_prime = rh_prime_data[reach].to_numpy()
         tmp_area = area_data[reach].to_numpy() / tmp_meta['length']
+        tmp_volume = volume_data[reach].to_numpy() / tmp_meta['length']
 
         # Error handling
         if np.all(tmp_area == 0):
@@ -93,7 +102,6 @@ def extract_features(run_path, plot=False):
 
         ave = np.nanmean(tmp_rh_prime[bathymetry_break:])
         stdev = np.nanstd(tmp_rh_prime[bathymetry_break:])
-        ave -= stdev
 
         le_ave = (tmp_rh_prime < ave)
         le_ave[:bathymetry_break] = False  # Enforce channel not being included in EDZ comparisons
@@ -152,6 +160,11 @@ def extract_features(run_path, plot=False):
         w_edep = tmp_area[stop]
 
         if plot:
+
+            # generate discharges
+            q = (1 / np.repeat(0.035, len(tmp_el))) * tmp_volume * (tmp_rh ** (2 / 3)) * (tmp_meta['slope'] ** 0.5)
+
+            # plot
             fig, (section_ax, rh_ax, rhp_ax) = plt.subplots(ncols=3, figsize=(10, 3), sharey=True)
 
             tmp_area = tmp_area / 2
@@ -175,6 +188,18 @@ def extract_features(run_path, plot=False):
             rhp_ax.fill_betweenx(tmp_el_scaled[start:stop], ave, tmp_rh_prime[start:stop])
             rhp_ax.set(xlim=(-1, 1), ylim=(0, 5), xlabel=' ', ylabel='Stage / Bankfull Depth')
             rhp_ax.set_xlabel(r"$R_{h}$'", fontsize=10)
+
+            for reg in REGRESSIONS['peak_flowrate']:
+                params = REGRESSIONS['peak_flowrate'][reg]
+                q_ri = (params[0] * ((tmp_meta['TotDASqKm'] / 2.59) ** params[1])) / 35.3147
+                norm_stage = np.interp(q_ri, q, tmp_el_scaled)
+
+                section_ax.axhline(norm_stage, c='c', alpha=0.3, ls='dashed')
+                section_ax.text(min(tmp_area), norm_stage, reg, horizontalalignment='left', verticalalignment='bottom', fontsize='xx-small')
+                rh_ax.axhline(norm_stage, c='c', alpha=0.3, ls='dashed')
+                rh_ax.text(min(tmp_rh), norm_stage, reg, horizontalalignment='left', verticalalignment='bottom', fontsize='xx-small')
+                rhp_ax.axhline(norm_stage, c='c', alpha=0.3, ls='dashed')
+                rhp_ax.text(-1, norm_stage, reg, horizontalalignment='left', verticalalignment='bottom', fontsize='xx-small')
 
             fig.tight_layout()
             fig.savefig(os.path.join(run_dict['geometry_diagnostics'], f'{reach}.png'), dpi=100)
