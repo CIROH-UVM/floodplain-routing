@@ -143,7 +143,7 @@ def scale_stages(reach_data, el_data):
     reaches = pd.DataFrame({'ReachCode': el_data.columns})
     reach_data = pd.merge(reach_data, reaches, right_on='ReachCode', left_index=True, how='right')
     max_stages = bkf_equation(reach_data['TotDASqKm'].to_numpy())
-    el_scaled_data.iloc[:, :] = (el_data.iloc[:, :] / max_stages)
+    el_scaled_data.iloc[:, :] = (el_data.values / max_stages)
     el_scaled_data.iloc[:, 0] = el_data.iloc[:, 0]
     return el_scaled_data
 
@@ -261,7 +261,7 @@ def make_run_template(base_directory='/path/to/data', run_id='1'):
 if __name__ == '__main__':
     # make_run_template(r'/netfiles/ciroh/floodplainsData', '4')
     meta_path = r'/netfiles/ciroh/floodplainsData/runs/5/run_metadata.json'
-    topographic_signatures(meta_path)
+    # topographic_signatures(meta_path)
     batch_add_bathymetry(meta_path)
     # map_edzs(meta_path)
 
