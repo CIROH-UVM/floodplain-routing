@@ -208,6 +208,7 @@ def extract_topographic_signature(hand_path, aoi_path, slope_path, reaches=None,
 def add_bathymetry(geom, da, slope, shape='rectangle'):
     filter_arg = np.argmin(geom['el'] < 0.015)
     top_width = geom['area'][filter_arg]
+    top_width = max(top_width, 1)
     flowrate = (0.4962 * da) / 35.3147
     n = 0.035
     stage_space = np.linspace(0, 10, 1000)
