@@ -14,7 +14,7 @@ def topographic_signatures(meta_path):
 
     # Set up run
     if run_dict['scaled_stages']:
-        max_stage_equation = lambda da: 5 * (0.26 * (da ** 0.287))
+        max_stage_equation = lambda da: 6 * (0.26 * (da ** 0.287))
     else:
         max_stage_equation = lambda da: 10
 
@@ -128,11 +128,24 @@ def batch_add_bathymetry(meta_path):
             out_dfs[i][reach] = tmp_geom[i]
             out_dfs[i] = out_dfs[i].copy()
     
+    out_dfs['el_scaled'] = scale_stages(reach_data, out_dfs['el'])
+
     for i in out_dfs:
         out_dfs[i].to_csv(os.path.join(run_dict['geometry_directory'], f'{i}.csv'), index=False)
     
     with open(meta_path, 'w') as f:
         json.dump(run_dict, f)
+
+
+def scale_stages(reach_data, el_data):
+    el_scaled_data = el_data.copy()
+    bkf_equation = lambda da: 0.26 * (da ** 0.287)
+    reaches = pd.DataFrame({'ReachCode': el_data.columns})
+    reach_data = pd.merge(reach_data, reaches, right_on='ReachCode', left_index=True, how='right')
+    max_stages = bkf_equation(reach_data['TotDASqKm'].to_numpy())
+    el_scaled_data.iloc[:, :] = (el_data.iloc[:, :] / max_stages)
+    el_scaled_data.iloc[:, 0] = el_data.iloc[:, 0]
+    return el_scaled_data
 
 def batch_geomorphons(working_directory):
     run_list = ['WIN_0504']
@@ -247,9 +260,9 @@ def make_run_template(base_directory='/path/to/data', run_id='1'):
 
 if __name__ == '__main__':
     # make_run_template(r'/netfiles/ciroh/floodplainsData', '4')
-    # meta_path = r'/netfiles/ciroh/floodplainsData/runs/4/run_metadata.json'
-    # topographic_signatures(meta_path)
-    # batch_add_bathymetry(meta_path)
+    meta_path = r'/netfiles/ciroh/floodplainsData/runs/5/run_metadata.json'
+    topographic_signatures(meta_path)
+    batch_add_bathymetry(meta_path)
     # map_edzs(meta_path)
 
-    batch_geomorphons(r'/netfiles/ciroh/floodplainsData')
+    # batch_geomorphons(r'/netfiles/ciroh/floodplainsData')
