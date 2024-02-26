@@ -187,9 +187,9 @@ def extract_features(run_path, plot=False):
 
         # Generate general stats
         edz_count = len(edzs)
-        edz_vols = [e['volume'] for e in edzs]
+        edz_vols = [edzs[e]['volume'] for e in edzs]
         cum_vol = sum(edz_vols)
-        cum_height = sum([e['height'] for e in edzs])
+        cum_height = sum([edzs[e]['height'] for e in edzs])
         man_edz_ind = [i for v, i in sorted(zip(edz_vols, edzs.keys()))][0]
         main_edz = edzs[man_edz_ind]
         bathymetry_break = np.argmax(tmp_area > tmp_area[0])  # will only work for rectangular cross sections
@@ -203,7 +203,7 @@ def extract_features(run_path, plot=False):
             tmp_features[0] = reach
             features.append(tmp_features)
         else:
-            features.append([reach, ave, el_bathymetry, main_edz['start_el'], main_edz['el_argmin'], main_edz['stop_el'], el_bathymetry_scaled, main_edz['start_el_scaled'], main_edz['el_argmin_scaled'], main_edz['stop_el_scaled'], main_edz['height'], main_edz['height_scaled'], main_edz['vol'], main_edz['vol_scaled'], main_edz['min_val'], main_edz['slope_start_min'], main_edz['slope_min_stop'], main_edz['rh_bottom'], main_edz['rh_edap'], main_edz['rh_min'], main_edz['rh_edep'], main_edz['w_bottom'], main_edz['w_edap'], main_edz['w_min'], main_edz['w_edep'], 0])
+            features.append([reach, ave, el_bathymetry, main_edz['start_el'], main_edz['min_el'], main_edz['stop_el'], el_bathymetry_scaled, main_edz['start_el_scaled'], main_edz['min_el_scaled'], main_edz['stop_el_scaled'], main_edz['height'], main_edz['height_scaled'], main_edz['volume'], main_edz['vol_scaled'], main_edz['min_val'], main_edz['slope_start_min'], main_edz['slope_min_stop'], main_edz['rh_bottom'], main_edz['rh_edap'], main_edz['rh_min'], main_edz['rh_edep'], main_edz['w_bottom'], main_edz['w_edap'], main_edz['w_min'], main_edz['w_edep'], 0])
 
         if plot:
 
