@@ -13,6 +13,98 @@ with open('source/regressions.json') as in_file:
 FEATURE_NAMES = ['ReachCode', 'ave_rhp', 'el_bathymetry', 'el_edap', 'el_min', 'el_edep', 'el_bathymetry_scaled', 'el_edap_scaled', 'el_min_scaled', 'el_edep_scaled', 'height', 'height_scaled', 'vol', 'vol_scaled', 'min_rhp', 'slope_start_min', 'slope_min_stop', 'rh_bottom', 'rh_edap', 'rh_min', 'rh_edep', 'w_bottom', 'w_edap', 'w_min', 'w_edep', 'invalid_geometry']
 ERROR_ARRAY = [np.nan for i in FEATURE_NAMES]
 
+def get_edzs(el, el_scaled, rh, rh_prime, widths, thresh=0.5, max_stage=2.5):
+    # Initialize outputs
+    edzs = dict()
+
+    # Establish additional params
+    max_stage_ind = np.argmax(el_scaled > max_stage)
+    bathymetry_break = np.argmax(widths > widths[0])  # will only work for rectangular cross sections
+    stage_inc = el[1] - el[0]
+    stage_inc_scaled = el_scaled[1] - el_scaled[0]
+
+    # Define potential EDZs
+    edz_bool = (rh_prime < thresh)
+    transitions = edz_bool[:-1] != edz_bool[1:]
+    transitions[0] = True
+    transitions[-1] = True
+    edz_indices = np.argwhere(transitions)[:, 0]
+
+    # Add attributes
+    for i in range(len(edz_indices) - 1):
+        start, stop = edz_indices[i], edz_indices[i + 1]
+        # Limit EDZs.  Above-channel to max-stage
+        if start < bathymetry_break:
+            if stop < bathymetry_break:
+                continue
+            else:
+                start = bathymetry_break
+        elif start > max_stage_ind:
+            continue
+
+        tmp_rhp = rh_prime[start:stop]
+
+        vol = (thresh - tmp_rhp).sum() * stage_inc
+        vol_scaled = (thresh - tmp_rhp).sum() * stage_inc_scaled
+        if vol <= 0:
+            continue
+
+        start_el = el[start]
+        stop_el = el[stop]
+        start_el_scaled = el_scaled[start]
+        stop_el_scaled = el_scaled[stop]
+
+        height = stop_el - start_el
+        height_scaled = stop_el_scaled - start_el_scaled
+
+        argmin = np.argmin(tmp_rhp) + start
+        min_val = rh_prime[argmin]
+        el_argmin = el[argmin]
+        el_argmin_scaled = el_scaled[argmin]
+
+        slope_start_min = (min_val - thresh) / (el_argmin - start_el)
+        slope_min_stop = (thresh - min_val) / (stop_el - el_argmin)
+
+        rh_bottom = rh[max(bathymetry_break - 1, 0)]
+        rh_edap = rh[start]
+        rh_min = rh[argmin]
+        rh_edep = rh[stop]
+
+        w_bottom = widths[max(bathymetry_break - 1, 0)]
+        w_edap = widths[start]
+        w_min = widths[argmin]
+        w_edep = widths[stop]
+    
+        edzs[i] = {
+            'start_ind': start,
+            'stop_ind': stop,
+            'start_el': start_el,
+            'stop_el': stop_el,
+            'start_el_scaled': start_el_scaled,
+            'stop_el_scaled': stop_el_scaled,
+            'volume': vol,
+            'vol_scaled': vol_scaled,
+            'height': height,
+            'height_scaled': height_scaled,
+            'min_val': min_val,
+            'min_ind': argmin,
+            'min_el': el_argmin,
+            'min_el_scaled': el_argmin_scaled,
+            'slope_start_min': slope_start_min,
+            'slope_min_stop': slope_min_stop,
+            'rh_bottom': rh_bottom,
+            'rh_edap': rh_edap,
+            'rh_min': rh_min,
+            'rh_edep': rh_edep,
+            'w_bottom': w_bottom,
+            'w_edap': w_edap,
+            'w_min': w_min,
+            'w_edep': w_edep
+        }
+
+    return edzs
+
+
 def extract_features(run_path, plot=False):
     # Load data
     with open(run_path, 'r') as f:
@@ -88,90 +180,30 @@ def extract_features(run_path, plot=False):
             continue
 
         # Process
+        thresh = 0.5
+        max_stage = 2.5
+        
+        edzs = get_edzs(tmp_el, tmp_el_scaled, tmp_rh, tmp_rh_prime, tmp_area, thresh, max_stage)
+
+        # Generate general stats
+        edz_count = len(edzs)
+        edz_vols = [e['volume'] for e in edzs]
+        cum_vol = sum(edz_vols)
+        cum_height = sum([e['height'] for e in edzs])
+        man_edz_ind = [i for v, i in sorted(zip(edz_vols, edzs.keys()))][0]
+        main_edz = edzs[man_edz_ind]
         bathymetry_break = np.argmax(tmp_area > tmp_area[0])  # will only work for rectangular cross sections
         el_bathymetry = tmp_el[bathymetry_break]
         el_bathymetry_scaled = tmp_el_scaled[bathymetry_break]
+        ave = np.nanmean(tmp_rh_prime)
+        stdev = np.nanstd(tmp_rh_prime)
 
-        ave = np.nanmean(tmp_rh_prime[bathymetry_break:])
-        stdev = np.nanstd(tmp_rh_prime[bathymetry_break:])
-
-        thresh = 0.5
-        max_stage = 2.5
-        max_stage_ind = np.argmax(tmp_el_scaled > max_stage)
-
-        edz_bool = (tmp_rh_prime < thresh)
-        edz_bool[:bathymetry_break] = False  # Enforce channel not being included in EDZ comparisons
-        # Allow EDZs only for stages accessed in frequent floods
-        if tmp_rh_prime[max_stage_ind] < thresh:
-            if np.argmax(tmp_rh_prime[max_stage_ind:] > thresh) == 0:
-                max_stage_ind = tmp_rh_prime.shape[0] - 1
-            else:
-                max_stage_ind = max_stage_ind + np.argmax(tmp_rh_prime[max_stage_ind:] > thresh)  # find first point after max_stage where rh' > thresh
-        edz_bool[max_stage_ind:] = False  # Allow EDZs only for stages accessed in frequent floods
-
-        transitions = edz_bool[:-1] != edz_bool[1:]
-        if transitions.sum() != 0:
-            edz_indices = np.argwhere(transitions)[:, 0]
-            edzs = np.split(tmp_rh_prime, edz_indices)
-            volumes = np.array([(thresh - e).sum() for e in edzs])
-            heights = np.array([e.shape[0] for e in edzs])
-            cum_vol = volumes[volumes > 0].sum()
-            cum_height = heights[volumes > 0].sum()
-            edz_count = (volumes > 0).sum()
-        else:
-            edz_count = 0
         if edz_count == 0:
             tmp_features = ERROR_ARRAY.copy()
             tmp_features[0] = reach
             features.append(tmp_features)
         else:
-            # get main_edz_indices
-            edz_indices = np.insert(edz_indices, 0, 0)
-            edz_indices = np.append(edz_indices, max_stage_ind)
-            start = edz_indices[np.argmax(volumes)]
-            stop = edz_indices[np.argmax(volumes) + 1]
-
-            start_el = tmp_el[start]
-            stop_el = tmp_el[stop]
-
-            start_el_scaled = tmp_el_scaled[start]
-            stop_el_scaled = tmp_el_scaled[stop]
-
-            height = stop_el - start_el
-            height_scaled = stop_el_scaled - start_el_scaled
-
-            argmin = np.argmin(tmp_rh_prime[start:stop]) + start
-            min_val = tmp_rh_prime[argmin]
-            el_argmin = tmp_el[argmin]
-            el_argmin_scaled = tmp_el_scaled[argmin]
-
-            del_el_meters = tmp_el[1:] - tmp_el[:-1]
-            del_el_meters = np.append(del_el_meters, del_el_meters[-1])
-            del_el_scaled = tmp_el_scaled[1:] - tmp_el_scaled[:-1]
-            del_el_scaled = np.append(del_el_scaled, del_el_scaled[-1])
-            vol = np.sum((ave - tmp_rh_prime[start:stop]) * del_el_meters[start:stop])
-            vol_scaled = np.sum((ave - tmp_rh_prime[start:stop]) * del_el_scaled[start:stop])
-
-            if argmin != start:
-                # slope_start_min = (min_val - ave) / (argmin - start)  # Old
-                slope_start_min = (min_val - ave) / (el_argmin - start_el)
-            else:
-                slope_start_min = 0
-            if argmin != stop:
-                # slope_min_stop = (ave - min_val) / (stop - argmin) # Old
-                slope_min_stop = (ave - min_val) / (stop_el - el_argmin)
-            else:
-                slope_min_stop = 0
-
-            rh_bottom = tmp_rh[max(bathymetry_break - 1, 0)]
-            rh_edap = tmp_rh[start]
-            rh_min = tmp_rh[argmin]
-            rh_edep = tmp_rh[stop]
-
-            w_bottom = tmp_area[max(bathymetry_break - 1, 0)]
-            w_edap = tmp_area[start]
-            w_min = tmp_area[argmin]
-            w_edep = tmp_area[stop]
+            features.append([reach, ave, el_bathymetry, main_edz['start_el'], main_edz['el_argmin'], main_edz['stop_el'], el_bathymetry_scaled, main_edz['start_el_scaled'], main_edz['el_argmin_scaled'], main_edz['stop_el_scaled'], main_edz['height'], main_edz['height_scaled'], main_edz['vol'], main_edz['vol_scaled'], main_edz['min_val'], main_edz['slope_start_min'], main_edz['slope_min_stop'], main_edz['rh_bottom'], main_edz['rh_edap'], main_edz['rh_min'], main_edz['rh_edep'], main_edz['w_bottom'], main_edz['w_edap'], main_edz['w_min'], main_edz['w_edep'], 0])
 
         if plot:
 
@@ -205,7 +237,6 @@ def extract_features(run_path, plot=False):
             rhp_ax.set(xlim=(-1, 1), ylim=(0, 6), xlabel=' ', ylabel='Stage / Bankfull Depth')
             rhp_ax.set_xlabel(r"$R_{h}$'", fontsize=10)
 
-            for 
 
             for reg in REGRESSIONS['peak_flowrate']:
                 params = REGRESSIONS['peak_flowrate'][reg]
@@ -222,8 +253,6 @@ def extract_features(run_path, plot=False):
             fig.tight_layout()
             fig.savefig(os.path.join(run_dict['geometry_diagnostics'], f'{reach}.png'), dpi=100)
             plt.close()
-
-        features.append([reach, ave, el_bathymetry, start_el, el_argmin, stop_el, el_bathymetry_scaled, start_el_scaled, el_argmin_scaled, stop_el_scaled, height, height_scaled, vol, vol_scaled, min_val, slope_start_min, slope_min_stop, rh_bottom, rh_edap, rh_min, rh_edep, w_bottom, w_edap, w_min, w_edep, 0])
 
     # Save
     # columns = ['ReachCode', 'ave_rhp', 'el_bathymetry', 'el_edap', 'el_min', 'el_edep', 'el_bathymetry_scaled', 'el_edap_scaled', 'el_min_scaled', 'el_edep_scaled', 'height', 'height_scaled', 'vol', 'vol_scaled', 'min_rhp', 'slope_start_min', 'slope_min_stop', 'rh_bottom', 'rh_edap', 'rh_min', 'rh_edep', 'w_bottom', 'w_edap', 'w_min', 'w_edep', 'invalid_geometry']
