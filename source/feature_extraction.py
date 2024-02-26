@@ -10,16 +10,18 @@ import json
 with open('source/regressions.json') as in_file:
     REGRESSIONS = json.load(in_file)
 
-FEATURE_NAMES = ['ReachCode', 'ave_rhp', 'el_bathymetry', 'el_edap', 'el_min', 'el_edep', 'el_bathymetry_scaled', 'el_edap_scaled', 'el_min_scaled', 'el_edep_scaled', 'height', 'height_scaled', 'vol', 'vol_scaled', 'min_rhp', 'slope_start_min', 'slope_min_stop', 'rh_bottom', 'rh_edap', 'rh_min', 'rh_edep', 'w_bottom', 'w_edap', 'w_min', 'w_edep', 'invalid_geometry']
+FEATURE_NAMES = ['ReachCode', 'ave_rhp', 'stdev_rhp', 'cumulative_volume', 'cumulative_height', 'el_bathymetry', 'el_edap', 'el_min', 'el_edep', 'el_bathymetry_scaled', 'el_edap_scaled', 'el_min_scaled', 'el_edep_scaled', 'height', 'height_scaled', 'vol', 'vol_scaled', 'min_rhp', 'slope_start_min', 'slope_min_stop', 'rh_bottom', 'rh_edap', 'rh_min', 'rh_edep', 'w_bottom', 'w_edap', 'w_min', 'w_edep', 'invalid_geometry']
 ERROR_ARRAY = [np.nan for i in FEATURE_NAMES]
 
 class ReachPlot:
 
     def __init__(self, out_dir, reach) -> None:
+        os.makedirs(out_dir, exist_ok=True)
         self.reach = reach
         self.out_path = os.path.join(out_dir, f'{reach}.png')
         self.fig, (self.section_ax, self.rh_ax, self.rhp_ax) = plt.subplots(ncols=3, figsize=(10, 3), sharey=True)
         self.all_ax = (self.section_ax, self.rh_ax, self.rhp_ax)
+        self.has_geom = False
 
         # Add labels
         self.section_ax.set_xlabel('Station (m)', fontsize=10)
@@ -33,6 +35,7 @@ class ReachPlot:
         self.save()
     
     def add_geometry(self, el, width, rh, rhp, ave):
+        self.has_geom = True
         # convert semi-cross-section to pseudo-cross-section
         width = width / 2
         width = np.append(-width[::-1], width)
@@ -79,9 +82,10 @@ class ReachPlot:
 
     def save(self, dpi=100):
         # update extents
-        self.section_ax.set(xlim=(min(self.width), max(self.width)), ylim=(0, 6))
-        self.rh_ax.set(xlim=(min(self.rh), max(self.rh)), ylim=(0, 6))
-        self.rhp_ax.set(xlim=(-1, 1), ylim=(0, 6))
+        if self.has_geom:
+            self.section_ax.set(xlim=(min(self.width), max(self.width)), ylim=(0, 6))
+            self.rh_ax.set(xlim=(min(self.rh), max(self.rh)), ylim=(0, 6))
+            self.rhp_ax.set(xlim=(-1, 1), ylim=(0, 6))
 
         # Export
         self.fig.suptitle(self.reach)
@@ -228,7 +232,7 @@ def extract_features(run_path, plot=False):
     valid_reaches = valid_reaches.intersection(rh_prime_data.columns)
     valid_reaches = valid_reaches.intersection(area_data.columns)
     valid_reaches = valid_reaches.intersection(volume_data.columns)
-    valid_reaches = valid_reaches.intersection(['4300103000354', '4300103001161', '4300103000982', '4300103003935', '4300103000593', '4300103001614', '4300103000851', '4300103000774', '4300103001615', '4300102001939', '4300102003887', '4300102003254', '4300102000550', '4300102002497', '4300102002905', '4300102000630', '4300102000677', '4300102000427', '4300102004925', '4300102007625', '4300102001305', '4300102007508', '4300102001169', '4300102007401', '4300102003558', '4300102005816', '4300102001982', '4300102007100', '4300102006177', '4300102003892', '4300102001790', '4300102003372', '4300102000063', '4300102003800', '4300102001600', '4300102000226', '4300102002356', '4300102000793', '4300102006167', '4300102000386', '4300102003504', '4300102000601', '4300102002065', '4300102000098', '4300102000099', '4300102000309', '4300102000219', '4300102000221', '4300107000762', '4300107000695', '4300107001240', '4300107001221', '4300107000086', '4300107000250', '4300107001574', '4300103000937', '4300103000749', '4300103000054', '4300103001199', '4300103001512', '4300108004810', '4300108006384', '4300108005994', '4300108000265', '4300108004999', '4300108006197', '4300108005916', '4300103003276', '4300103002522', '4300103000182', '4300103000516', '4300102006261', '4300102005415', '4300102005384', '4300102002132', '4300102005477', '4300100000000'])
+    # valid_reaches = valid_reaches.intersection(['4300103000354', '4300103001161', '4300103000982', '4300103003935', '4300103000593', '4300103001614', '4300103000851', '4300103000774', '4300103001615', '4300102001939', '4300102003887', '4300102003254', '4300102000550', '4300102002497', '4300102002905', '4300102000630', '4300102000677', '4300102000427', '4300102004925', '4300102007625', '4300102001305', '4300102007508', '4300102001169', '4300102007401', '4300102003558', '4300102005816', '4300102001982', '4300102007100', '4300102006177', '4300102003892', '4300102001790', '4300102003372', '4300102000063', '4300102003800', '4300102001600', '4300102000226', '4300102002356', '4300102000793', '4300102006167', '4300102000386', '4300102003504', '4300102000601', '4300102002065', '4300102000098', '4300102000099', '4300102000309', '4300102000219', '4300102000221', '4300107000762', '4300107000695', '4300107001240', '4300107001221', '4300107000086', '4300107000250', '4300107001574', '4300103000937', '4300103000749', '4300103000054', '4300103001199', '4300103001512', '4300108004810', '4300108006384', '4300108005994', '4300108000265', '4300108004999', '4300108006197', '4300108005916', '4300103003276', '4300103002522', '4300103000182', '4300103000516', '4300102006261', '4300102005415', '4300102005384', '4300102002132', '4300102005477', '4300100000000'])
     valid_reaches = sorted(valid_reaches)
     
     # Extract features
@@ -253,6 +257,7 @@ def extract_features(run_path, plot=False):
                 reach_plot.no_geometry()
             tmp_features = ERROR_ARRAY.copy()
             tmp_features[0] = reach
+            tmp_features[-1] = 1
             features.append(tmp_features)
             continue
 
@@ -276,37 +281,42 @@ def extract_features(run_path, plot=False):
         if edz_count == 0:
             tmp_features = ERROR_ARRAY.copy()
             tmp_features[0] = reach
+            tmp_features[1] = ave
+            tmp_features[2] = stdev
+            tmp_features[3] = 0
+            tmp_features[4] = 0
+            tmp_features[5] = el_bathymetry
+            tmp_features[9] = el_bathymetry_scaled
             main_edz = None
             features.append(tmp_features)
         else:
-            main_edz_ind = [i for v, i in sorted(zip(edz_vols, edzs.keys()))][0]
+            main_edz_ind = [i for v, i in sorted(zip(edz_vols, edzs.keys()), reverse=True)][0]
             main_edz = edzs[main_edz_ind]
-            features.append([reach, ave, el_bathymetry, main_edz['start_el'], main_edz['min_el'], main_edz['stop_el'], el_bathymetry_scaled, main_edz['start_el_scaled'], main_edz['min_el_scaled'], main_edz['stop_el_scaled'], main_edz['height'], main_edz['height_scaled'], main_edz['volume'], main_edz['vol_scaled'], main_edz['min_val'], main_edz['slope_start_min'], main_edz['slope_min_stop'], main_edz['rh_bottom'], main_edz['rh_edap'], main_edz['rh_min'], main_edz['rh_edep'], main_edz['w_bottom'], main_edz['w_edap'], main_edz['w_min'], main_edz['w_edep'], 0])
+            features.append([reach, ave, stdev, cum_vol, cum_height, el_bathymetry, main_edz['start_el'], main_edz['min_el'], main_edz['stop_el'], el_bathymetry_scaled, main_edz['start_el_scaled'], main_edz['min_el_scaled'], main_edz['stop_el_scaled'], main_edz['height'], main_edz['height_scaled'], main_edz['volume'], main_edz['vol_scaled'], main_edz['min_val'], main_edz['slope_start_min'], main_edz['slope_min_stop'], main_edz['rh_bottom'], main_edz['rh_edap'], main_edz['rh_min'], main_edz['rh_edep'], main_edz['w_bottom'], main_edz['w_edap'], main_edz['w_min'], main_edz['w_edep'], 0])
 
         if plot:
             reach_plot.add_geometry(tmp_el_scaled, tmp_area, tmp_rh, tmp_rh_prime, ave)
             reach_plot.add_edzs(edzs, main_edz)
-            q = (1 / np.repeat(0.035, len(tmp_el))) * tmp_volume * (tmp_rh ** (2 / 3)) * (tmp_meta['slope'] ** 0.5)
+            q = (1 / np.repeat(0.07, len(tmp_el))) * tmp_volume * (tmp_rh ** (2 / 3)) * (tmp_meta['slope'] ** 0.5)
             da = tmp_meta['TotDASqKm']
             reach_plot.add_aeps(q, da)
             reach_plot.save()
 
     # Save
-    # columns = ['ReachCode', 'ave_rhp', 'el_bathymetry', 'el_edap', 'el_min', 'el_edep', 'el_bathymetry_scaled', 'el_edap_scaled', 'el_min_scaled', 'el_edep_scaled', 'height', 'height_scaled', 'vol', 'vol_scaled', 'min_rhp', 'slope_start_min', 'slope_min_stop', 'rh_bottom', 'rh_edap', 'rh_min', 'rh_edep', 'w_bottom', 'w_edap', 'w_min', 'w_edep', 'invalid_geometry']
-    # if os.path.exists(run_dict['muskingum_path']):
-    #     merge_df = run_dict['muskingum_path']
+    if os.path.exists(run_dict['muskingum_path']):
+        merge_df = run_dict['muskingum_path']
 
-    #     merge_df = pd.read_csv(merge_df)
-    #     merge_df['ReachCode'] = merge_df['ReachCode'].astype(int).astype(str)
+        merge_df = pd.read_csv(merge_df)
+        merge_df['ReachCode'] = merge_df['ReachCode'].astype(int).astype(str)
 
-    #     out_df = pd.DataFrame(features, columns=columns)
-    #     out_df = merge_df.merge(out_df, how='inner', on='ReachCode')
-    # else:
-    #     out_df = pd.DataFrame(features, columns=columns)
-    # os.makedirs(os.path.dirname(run_dict['analysis_path']), exist_ok=True)
-    # out_df.to_csv(run_dict['analysis_path'], index=False)
+        out_df = pd.DataFrame(features, columns=FEATURE_NAMES)
+        out_df = merge_df.merge(out_df, how='inner', on='ReachCode')
+    else:
+        out_df = pd.DataFrame(features, columns=FEATURE_NAMES)
+    os.makedirs(os.path.dirname(run_dict['analysis_path']), exist_ok=True)
+    out_df.to_csv(run_dict['analysis_path'], index=False)
 
 
 if __name__ == '__main__':
     run_path = r'/netfiles/ciroh/floodplainsData/runs/5/run_metadata.json'
-    extract_features(run_path, plot=True)
+    extract_features(run_path, plot=False)
