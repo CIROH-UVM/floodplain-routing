@@ -249,6 +249,7 @@ def make_run_template(base_directory='/path/to/data', run_id='1'):
         "scaled_stages": True,
         "huc4": "0430",
         "subunit_path": os.path.join(base_directory,'shared', 'subunits.shp'),
+        "geometry_source": 'HAND'
         }
 
     for key in run_metadata:
@@ -264,10 +265,10 @@ def make_run_template(base_directory='/path/to/data', run_id='1'):
         json.dump(run_metadata, f)
 
 if __name__ == '__main__':
-    # make_run_template(r'/netfiles/ciroh/floodplainsData', '4')
-    meta_path = r'/netfiles/ciroh/floodplainsData/runs/5/run_metadata.json'
+    make_run_template(r'/netfiles/ciroh/floodplainsData', 'nwm')
+    # meta_path = r'/netfiles/ciroh/floodplainsData/runs/5/run_metadata.json'
     # topographic_signatures(meta_path)
     # batch_add_bathymetry(meta_path)
-    map_edzs(meta_path)
+    # map_edzs(meta_path)
 
     # batch_geomorphons(r'/netfiles/ciroh/floodplainsData')
