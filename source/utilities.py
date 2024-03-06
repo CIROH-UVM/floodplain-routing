@@ -138,6 +138,36 @@ def reach_hydraulics(r, thiessens, elevations, slope, el_nd, resolution, bins):
 
     return wrk_df
 
+def nwm_geometry(da, stages):
+    # Equations based on Read et al. (2023, JAWRA) https://onlinelibrary.wiley.com/doi/full/10.1111/1752-1688.13134
+    tw = 2.44 * (da ** 0.34)
+    a_ch = 0.75 * (da ** 0.53)
+    bf = (a_ch / tw) * 1.25
+    bw = ((2 * a_ch) / bf) - tw
+    z = (tw - bw) / bf
+    tw_cc = 3 * bf
+
+    # Interpolate data
+    wrk_df = pd.DataFrame({'el': stages})
+    bf_ind = np.argmax(wrk_df['el'] > bf)
+
+    wrk_df['area'] = bw + (wrk_df['el'] * z)
+    wrk_df['area'].iloc[bf_ind:] = tw_cc
+
+    h = ((wrk_df['el'] ** 2) * (1 + ((z ** 2) / 4))) ** 0.5
+    wrk_df['p'] = bw + (2 * h)
+    wrk_df['p'].iloc[bf_ind:] = wrk_df['p'].iloc[bf_ind] + (tw_cc - tw) + ((wrk_df['el'] - bf) * 2)
+
+    wrk_df['vol'] = wrk_df['el'] * ((bw + (wrk_df['el'] * z)) * 0.5)
+    wrk_df['vol'].iloc[bf_ind:] = wrk_df['vol'].iloc[bf_ind] + ((wrk_df['el'] - bf) * tw_cc)
+
+    wrk_df['rh'] = wrk_df['vol'] / wrk_df['p']
+
+    wrk_df['rh_prime'] = (wrk_df['rh'].shift(-1) - wrk_df['rh']) / (stages[1] - stages[0])
+    wrk_df['rh_prime'] = np.nan_to_num(wrk_df['rh_prime'])
+
+    return wrk_df
+
 
 def subunit_hydraulics(hand_path, aoi_path, slope_path, stages, reach_field=None, reaches=None, fields_of_interest=None):
     elevations = load_raster(hand_path)
@@ -161,6 +191,25 @@ def subunit_hydraulics(hand_path, aoi_path, slope_path, stages, reach_field=None
             # data_dict[k] = pd.concat((data_dict[k], wrk_df[k].rename(r)), axis=1, ignore_index=True)
             data_dict[k][r] = wrk_df[k].reset_index(drop=True)
             # data_dict[k] = data_dict[k].reset_index(drop=True)
+
+        counter += 1
+    print('')
+    print(f'Completed processing in {round(time.perf_counter() - t1, 1)} seconds')
+    return data_dict
+
+def nwm_subunit(reaches, stages, fields_of_interest=None):
+    data_dict = {k: pd.DataFrame() for k in fields_of_interest}
+
+    counter = 1
+    t1 = time.perf_counter()
+    for r, s in zip(reaches, stages):
+        print(f'{counter} / {len(reaches)}', end="\r")
+
+
+        wrk_df = nwm_geometry(da, stages)
+
+        for k in data_dict:
+            data_dict[k][r] = wrk_df[k].reset_index(drop=True)
 
         counter += 1
     print('')

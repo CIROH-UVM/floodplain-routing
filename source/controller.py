@@ -4,7 +4,7 @@ import pandas as pd
 import geopandas as gpd
 import numpy as np
 import json
-from utilities import subunit_hydraulics, generate_geomorphons, add_bathymetry, map_edz, merge_rasters, reclass_geomorphons_channel
+from utilities import subunit_hydraulics, generate_geomorphons, add_bathymetry, map_edz, merge_rasters, reclass_geomorphons_channel, nwm_subunit
 
 
 def topographic_signatures(meta_path):
@@ -36,19 +36,23 @@ def topographic_signatures(meta_path):
         for subunit in subunits:
             print(f'subunit {counter}: {subunit}')
             counter += 1
-            hand_path = os.path.join(run_dict['data_directory'], unit, 'subbasins', subunit, 'rasters', 'HAND.tif')
-            slope_path = os.path.join(run_dict['data_directory'], unit, 'subbasins', subunit, 'rasters', 'slope.tif')
-            if not (os.path.exists(hand_path) and os.path.exists(slope_path)):
-                print(f'No data for {subunit} found')
-                continue
 
-            reachesin_subunit = reaches_in_unit[reaches_in_unit[run_dict["subunit_field"]] == subunit]
-            reachesin_subunit = reachesin_subunit.groupby(reachesin_subunit[run_dict['id_field']]).agg(TotDASqKm=('TotDASqKm', 'max'))
-            reach_list = reachesin_subunit.index.to_list()
-            reachesin_subunit['max_stage'] = reachesin_subunit['TotDASqKm'].apply(max_stage_equation)
-            stages = np.array([np.linspace(0, max_stage_equation(dasqkm), 1000) for dasqkm in reachesin_subunit['TotDASqKm'].to_list()])
+            if run_dict['geometry_source'] == 'HAND':
+                hand_path = os.path.join(run_dict['data_directory'], unit, 'subbasins', subunit, 'rasters', 'HAND.tif')
+                slope_path = os.path.join(run_dict['data_directory'], unit, 'subbasins', subunit, 'rasters', 'slope.tif')
+                if not (os.path.exists(hand_path) and os.path.exists(slope_path)):
+                    print(f'No data for {subunit} found')
+                    continue
 
-            su_data_dict = subunit_hydraulics(hand_path, run_dict['reach_path'], slope_path, stages, reach_field=run_dict['id_field'], reaches=reach_list, fields_of_interest=run_dict['fields_of_interest'])
+                reachesin_subunit = reaches_in_unit[reaches_in_unit[run_dict["subunit_field"]] == subunit]
+                reachesin_subunit = reachesin_subunit.groupby(reachesin_subunit[run_dict['id_field']]).agg(TotDASqKm=('TotDASqKm', 'max'))
+                reach_list = reachesin_subunit.index.to_list()
+                reachesin_subunit['max_stage'] = reachesin_subunit['TotDASqKm'].apply(max_stage_equation)
+                stages = np.array([np.linspace(0, max_stage_equation(dasqkm), 1000) for dasqkm in reachesin_subunit['TotDASqKm'].to_list()])
+
+                su_data_dict = subunit_hydraulics(hand_path, run_dict['reach_path'], slope_path, stages, reach_field=run_dict['id_field'], reaches=reach_list, fields_of_interest=run_dict['fields_of_interest'])
+            elif run_dict['geometry_source'] == 'NWM':
+                su_data_dict = nwm_subunit(stages=stages, reaches=reach_list, fields_of_interest=run_dict['fields_of_interest'])
 
             for f in run_dict['fields_of_interest']:
                 data_dict[f].append(su_data_dict[f])
@@ -63,6 +67,7 @@ def topographic_signatures(meta_path):
         data_dict[f] = pd.concat(data_dict[f], axis=1)
         data_dict[f].to_csv(os.path.join(run_dict['geometry_directory'], f'{f}.csv'), index=False)
     print('Finished saving')
+
 
 def batch_add_bathymetry(meta_path):
     # Load run config
@@ -262,7 +267,7 @@ if __name__ == '__main__':
     # make_run_template(r'/netfiles/ciroh/floodplainsData', '4')
     meta_path = r'/netfiles/ciroh/floodplainsData/runs/5/run_metadata.json'
     # topographic_signatures(meta_path)
-    batch_add_bathymetry(meta_path)
-    # map_edzs(meta_path)
+    # batch_add_bathymetry(meta_path)
+    map_edzs(meta_path)
 
     # batch_geomorphons(r'/netfiles/ciroh/floodplainsData')
