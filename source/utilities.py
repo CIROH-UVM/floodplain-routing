@@ -151,15 +151,18 @@ def nwm_geometry(da, stages):
     wrk_df = pd.DataFrame({'el': stages})
     bf_ind = np.argmax(wrk_df['el'] > bf)
 
-    wrk_df['area'] = bw + (wrk_df['el'] * z)
-    wrk_df['area'].iloc[bf_ind:] = tw_cc
+    area = bw + (wrk_df['el'] * z)
+    area[bf_ind:] = tw_cc
+    wrk_df['area'] = area
 
     h = ((wrk_df['el'] ** 2) * (1 + ((z ** 2) / 4))) ** 0.5
-    wrk_df['p'] = bw + (2 * h)
-    wrk_df['p'].iloc[bf_ind:] = wrk_df['p'].iloc[bf_ind] + (tw_cc - tw) + ((wrk_df['el'] - bf) * 2)
+    p = bw + (2 * h)
+    p[bf_ind:] = (p[bf_ind] + (tw_cc - tw) + ((wrk_df['el'] - bf) * 2)).iloc[bf_ind:]
+    wrk_df['p'] = p
 
-    wrk_df['vol'] = wrk_df['el'] * ((bw + (wrk_df['el'] * z)) * 0.5)
-    wrk_df['vol'].iloc[bf_ind:] = wrk_df['vol'].iloc[bf_ind] + ((wrk_df['el'] - bf) * tw_cc)
+    vol = wrk_df['el'] * ((bw + (wrk_df['el'] * z)) * 0.5)
+    vol[bf_ind:] = (vol[bf_ind] + ((wrk_df['el'] - bf) * tw_cc)).iloc[bf_ind:]
+    wrk_df['vol'] = vol
 
     wrk_df['rh'] = wrk_df['vol'] / wrk_df['p']
 
@@ -197,16 +200,16 @@ def subunit_hydraulics(hand_path, aoi_path, slope_path, stages, reach_field=None
     print(f'Completed processing in {round(time.perf_counter() - t1, 1)} seconds')
     return data_dict
 
-def nwm_subunit(reaches, stages, fields_of_interest=None):
+def nwm_subunit(das, reaches, stages, fields_of_interest=None):
     data_dict = {k: pd.DataFrame() for k in fields_of_interest}
 
     counter = 1
     t1 = time.perf_counter()
-    for r, s in zip(reaches, stages):
+    for r, s, da in zip(reaches, stages, das):
         print(f'{counter} / {len(reaches)}', end="\r")
 
 
-        wrk_df = nwm_geometry(da, stages)
+        wrk_df = nwm_geometry(da, s)
 
         for k in data_dict:
             data_dict[k][r] = wrk_df[k].reset_index(drop=True)

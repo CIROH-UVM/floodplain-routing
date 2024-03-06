@@ -52,7 +52,12 @@ def topographic_signatures(meta_path):
 
                 su_data_dict = subunit_hydraulics(hand_path, run_dict['reach_path'], slope_path, stages, reach_field=run_dict['id_field'], reaches=reach_list, fields_of_interest=run_dict['fields_of_interest'])
             elif run_dict['geometry_source'] == 'NWM':
-                su_data_dict = nwm_subunit(stages=stages, reaches=reach_list, fields_of_interest=run_dict['fields_of_interest'])
+                reachesin_subunit = reaches_in_unit[reaches_in_unit[run_dict["subunit_field"]] == subunit]
+                reachesin_subunit = reachesin_subunit.groupby(reachesin_subunit[run_dict['id_field']]).agg(TotDASqKm=('TotDASqKm', 'max'))
+                reach_list = reachesin_subunit.index.to_list()
+                da_list = reachesin_subunit['TotDASqKm'].values
+                stages = np.array([np.linspace(0, max_stage_equation(dasqkm), 1000) for dasqkm in reachesin_subunit['TotDASqKm'].to_list()])
+                su_data_dict = nwm_subunit(das=da_list, stages=stages, reaches=reach_list, fields_of_interest=run_dict['fields_of_interest'])
 
             for f in run_dict['fields_of_interest']:
                 data_dict[f].append(su_data_dict[f])
@@ -265,9 +270,9 @@ def make_run_template(base_directory='/path/to/data', run_id='1'):
         json.dump(run_metadata, f)
 
 if __name__ == '__main__':
-    make_run_template(r'/netfiles/ciroh/floodplainsData', 'nwm')
-    # meta_path = r'/netfiles/ciroh/floodplainsData/runs/5/run_metadata.json'
-    # topographic_signatures(meta_path)
+    # make_run_template(r'/netfiles/ciroh/floodplainsData', 'nwm')
+    meta_path = r'/netfiles/ciroh/floodplainsData/runs/nwm/run_metadata.json'
+    topographic_signatures(meta_path)
     # batch_add_bathymetry(meta_path)
     # map_edzs(meta_path)
 
