@@ -145,7 +145,7 @@ def nwm_geometry(da, stages):
     bf = (a_ch / tw) * 1.25
     bw = ((2 * a_ch) / bf) - tw
     z = (tw - bw) / bf
-    tw_cc = 3 * bf
+    tw_cc = 3 * tw
 
     # Interpolate data
     wrk_df = pd.DataFrame({'el': stages})
@@ -200,16 +200,18 @@ def subunit_hydraulics(hand_path, aoi_path, slope_path, stages, reach_field=None
     print(f'Completed processing in {round(time.perf_counter() - t1, 1)} seconds')
     return data_dict
 
-def nwm_subunit(das, reaches, stages, fields_of_interest=None):
+def nwm_subunit(das, reaches, stages, lengths, fields_of_interest=None):
     data_dict = {k: pd.DataFrame() for k in fields_of_interest}
 
     counter = 1
     t1 = time.perf_counter()
-    for r, s, da in zip(reaches, stages, das):
+    for r, s, da, l in zip(reaches, stages, das, lengths):
         print(f'{counter} / {len(reaches)}', end="\r")
 
-
         wrk_df = nwm_geometry(da, s)
+        wrk_df['area'] = wrk_df['area'] * l
+        wrk_df['vol'] = wrk_df['vol'] * l
+        wrk_df['p'] = wrk_df['p'] * l
 
         for k in data_dict:
             data_dict[k][r] = wrk_df[k].reset_index(drop=True)
