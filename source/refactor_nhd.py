@@ -13,9 +13,17 @@ import json
 OGR_PATH = os.path.join(sys.prefix, 'bin', 'ogr2ogr')
 MANUAL_OVERRIDE = {'60000200057445': '4300102000489',
                    '60000200063685': '4300102000489'}
+NAME_DICT = {
+    'MSQ': 'missisquoi',
+    'LAM': 'lamoille',
+    'WIN': 'winooski',
+    'OTR': 'otter',
+    'MET': 'mettawee',
+    'LKC': 'champlain'
+    }
 
 def download_data(run_dict):
-    url = f'https://prd-tnm.s3.amazonaws.com/StagedProducts/Hydrography/NHDPlusHR/Beta/GDB/NHDPLUS_H_{run_dict["HUC4"]}_HU4_GDB.zip'
+    url = f'https://prd-tnm.s3.amazonaws.com/StagedProducts/Hydrography/NHDPlusHR/Beta/GDB/NHDPLUS_H_{run_dict["huc4"]}_HU4_GDB.zip'
     zip_path = os.path.join(run_dict['network_directory'], 'NHD.zip')
     unzip_path = os.path.join(run_dict['network_directory'], 'NHD')
 
@@ -110,6 +118,8 @@ def clip_to_study_area(gdb_path, run_dict):
     meta = meta[meta['ReachCode'].isin(nhd['MergeCode'].unique())]
     subunits = nhd[['MergeCode', 'Code_name']].drop_duplicates().rename(columns={'MergeCode': 'ReachCode'})
     meta = meta.merge(subunits, how='left', on='ReachCode')
+    meta[['8_code', run_dict['subunit_field']]] = meta['Code_name'].str.split('_', expand=True)
+    meta[run_dict['unit_field']] = meta['8_code'].map(NAME_DICT)
     meta.to_csv(run_dict['reach_meta_path'], index=False)
 
 def run_all(meta_path):
@@ -127,5 +137,5 @@ def run_all(meta_path):
 
 
 if __name__ == '__main__':
-    meta_path = r'/netfiles/ciroh/floodplainsData/runs/4/run_metadata.json'
+    meta_path = r'/netfiles/ciroh/floodplainsData/runs/nwm/run_metadata.json'
     run_all(meta_path)
