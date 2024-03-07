@@ -19,7 +19,7 @@ def topographic_signatures(meta_path):
         max_stage_equation = lambda da: 10
 
     # Load reaches/basins to run
-    reaches = gpd.read_file(run_dict['reach_path'], ignore_geometry=True)
+    reaches = pd.read_csv(run_dict['reach_meta_path'])
     units = reaches[run_dict['unit_field']].unique()
 
     # Initialize logging
@@ -53,11 +53,12 @@ def topographic_signatures(meta_path):
                 su_data_dict = subunit_hydraulics(hand_path, run_dict['reach_path'], slope_path, stages, reach_field=run_dict['id_field'], reaches=reach_list, fields_of_interest=run_dict['fields_of_interest'])
             elif run_dict['geometry_source'] == 'NWM':
                 reachesin_subunit = reaches_in_unit[reaches_in_unit[run_dict["subunit_field"]] == subunit]
-                reachesin_subunit = reachesin_subunit.groupby(reachesin_subunit[run_dict['id_field']]).agg(TotDASqKm=('TotDASqKm', 'max'))
+                reachesin_subunit = reachesin_subunit.groupby(reachesin_subunit[run_dict['id_field']]).agg(TotDASqKm=('TotDASqKm', 'max'), length=('length', 'sum'))
                 reach_list = reachesin_subunit.index.to_list()
+                length_list = reachesin_subunit['length'].values
                 da_list = reachesin_subunit['TotDASqKm'].values
                 stages = np.array([np.linspace(0, max_stage_equation(dasqkm), 1000) for dasqkm in reachesin_subunit['TotDASqKm'].to_list()])
-                su_data_dict = nwm_subunit(das=da_list, stages=stages, reaches=reach_list, fields_of_interest=run_dict['fields_of_interest'])
+                su_data_dict = nwm_subunit(das=da_list, stages=stages, lengths=length_list, reaches=reach_list, fields_of_interest=run_dict['fields_of_interest'])
 
             for f in run_dict['fields_of_interest']:
                 data_dict[f].append(su_data_dict[f])
@@ -71,6 +72,8 @@ def topographic_signatures(meta_path):
     for f in run_dict['fields_of_interest']:
         data_dict[f] = pd.concat(data_dict[f], axis=1)
         data_dict[f].to_csv(os.path.join(run_dict['geometry_directory'], f'{f}.csv'), index=False)
+    data_dict['el_scaled'] = scale_stages(reaches, data_dict['el'])
+    data_dict['el_scaled'].to_csv(os.path.join(run_dict['geometry_directory'], 'el_scaled.csv'), index=False)
     print('Finished saving')
 
 
