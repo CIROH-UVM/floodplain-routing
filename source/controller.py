@@ -72,6 +72,8 @@ def topographic_signatures(meta_path):
     for f in run_dict['fields_of_interest']:
         data_dict[f] = pd.concat(data_dict[f], axis=1)
         data_dict[f].to_csv(os.path.join(run_dict['geometry_directory'], f'{f}.csv'), index=False)
+    reaches['ReachCode'] = reaches['ReachCode'].astype(np.int64).astype(str)
+    reaches = reaches.set_index('ReachCode')
     data_dict['el_scaled'] = scale_stages(reaches, data_dict['el'])
     data_dict['el_scaled'].to_csv(os.path.join(run_dict['geometry_directory'], 'el_scaled.csv'), index=False)
     print('Finished saving')
@@ -153,7 +155,7 @@ def batch_add_bathymetry(meta_path):
 def scale_stages(reach_data, el_data):
     el_scaled_data = el_data.copy()
     bkf_equation = lambda da: 0.26 * (da ** 0.287)
-    reaches = pd.DataFrame({'ReachCode': el_data.columns})
+    reaches = pd.DataFrame({'ReachCode': el_data.columns.astype(str)})
     reach_data = pd.merge(reach_data, reaches, right_on='ReachCode', left_index=True, how='right')
     max_stages = bkf_equation(reach_data['TotDASqKm'].to_numpy())
     el_scaled_data.iloc[:, :] = (el_data.values / max_stages)
