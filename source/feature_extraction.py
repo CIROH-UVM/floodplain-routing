@@ -10,7 +10,7 @@ import json
 with open('source/regressions.json') as in_file:
     REGRESSIONS = json.load(in_file)
 
-FEATURE_NAMES = ['ReachCode', 'ave_rhp', 'stdev_rhp', 'cumulative_volume', 'cumulative_height', 'el_bathymetry', 'el_edap', 'el_min', 'el_edep', 'el_bathymetry_scaled', 'el_edap_scaled', 'el_min_scaled', 'el_edep_scaled', 'height', 'height_scaled', 'vol', 'vol_scaled', 'min_rhp', 'slope_start_min', 'slope_min_stop', 'rh_bottom', 'rh_edap', 'rh_min', 'rh_edep', 'w_bottom', 'w_edap', 'w_min', 'w_edep', 'invalid_geometry']
+FEATURE_NAMES = ['ReachCode', 'ave_rhp', 'stdev_rhp', 'cumulative_volume', 'cumulative_height', 'valley_confinement', 'el_bathymetry', 'el_edap', 'el_min', 'el_edep', 'el_bathymetry_scaled', 'el_edap_scaled', 'el_min_scaled', 'el_edep_scaled', 'height', 'height_scaled', 'vol', 'vol_scaled', 'min_rhp', 'slope_start_min', 'slope_min_stop', 'rh_bottom', 'rh_edap', 'rh_min', 'rh_edep', 'w_bottom', 'w_edap', 'w_min', 'w_edep', 'invalid_geometry']
 ERROR_ARRAY = [np.nan for i in FEATURE_NAMES]
 
 class ReachPlot:
@@ -138,7 +138,7 @@ def get_edzs(el, el_scaled, rh, rh_prime, widths, thresh=0.5, max_stage=2.5):
         height = stop_el - start_el
         height_scaled = stop_el_scaled - start_el_scaled
 
-        argmin = np.argmin(tmp_rhp) + start
+        argmin = min(1, np.argmin(tmp_rhp)) + start
         min_val = rh_prime[argmin]
         el_argmin = el[argmin]
         el_argmin_scaled = el_scaled[argmin]
@@ -285,14 +285,16 @@ def extract_features(run_path, plot=False):
             tmp_features[2] = stdev
             tmp_features[3] = 0
             tmp_features[4] = 0
-            tmp_features[5] = el_bathymetry
-            tmp_features[9] = el_bathymetry_scaled
+            tmp_features[5] = 1
+            tmp_features[6] = el_bathymetry
+            tmp_features[10] = el_bathymetry_scaled
             main_edz = None
             features.append(tmp_features)
         else:
             main_edz_ind = [i for v, i in sorted(zip(edz_vols, edzs.keys()), reverse=True)][0]
             main_edz = edzs[main_edz_ind]
-            features.append([reach, ave, stdev, cum_vol, cum_height, el_bathymetry, main_edz['start_el'], main_edz['min_el'], main_edz['stop_el'], el_bathymetry_scaled, main_edz['start_el_scaled'], main_edz['min_el_scaled'], main_edz['stop_el_scaled'], main_edz['height'], main_edz['height_scaled'], main_edz['volume'], main_edz['vol_scaled'], main_edz['min_val'], main_edz['slope_start_min'], main_edz['slope_min_stop'], main_edz['rh_bottom'], main_edz['rh_edap'], main_edz['rh_min'], main_edz['rh_edep'], main_edz['w_bottom'], main_edz['w_edap'], main_edz['w_min'], main_edz['w_edep'], 0])
+            valley_confinement = main_edz['w_edep'] / main_edz['w_edap']
+            features.append([reach, ave, stdev, cum_vol, cum_height, valley_confinement, el_bathymetry, main_edz['start_el'], main_edz['min_el'], main_edz['stop_el'], el_bathymetry_scaled, main_edz['start_el_scaled'], main_edz['min_el_scaled'], main_edz['stop_el_scaled'], main_edz['height'], main_edz['height_scaled'], main_edz['volume'], main_edz['vol_scaled'], main_edz['min_val'], main_edz['slope_start_min'], main_edz['slope_min_stop'], main_edz['rh_bottom'], main_edz['rh_edap'], main_edz['rh_min'], main_edz['rh_edep'], main_edz['w_bottom'], main_edz['w_edap'], main_edz['w_min'], main_edz['w_edep'], 0])
 
         if plot:
             reach_plot.add_geometry(tmp_el_scaled, tmp_area, tmp_rh, tmp_rh_prime, ave)
@@ -318,5 +320,5 @@ def extract_features(run_path, plot=False):
 
 
 if __name__ == '__main__':
-    run_path = r'/netfiles/ciroh/floodplainsData/runs/5/run_metadata.json'
-    extract_features(run_path, plot=False)
+    run_path = r'/netfiles/ciroh/floodplainsData/runs/nwm/run_metadata.json'
+    extract_features(run_path, plot=True)
