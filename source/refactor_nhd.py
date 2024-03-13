@@ -91,12 +91,12 @@ def clip_to_study_area(gdb_path, run_dict):
     print('Joining Merge Codes')
     intersected = intersected.merge(merged, on='NHDPlusID', how='inner')
     intersected = intersected.merge(meta[['ReachCode', 'TotDASqKm', 'slope']], on='ReachCode', how='left')
-    intersected = intersected.rename(columns={"ReachCode": "MergeCode"})
+    intersected = intersected.rename(columns={"ReachCode": run_dict["id_field"]})
     intersected['length'] = intersected.length  # only being used for subunit membership.  Not for slope calculation
-    grouped = intersected.groupby(['MergeCode', 'Code_name'])['length'].sum().reset_index()
-    max_length_subgroup = grouped.loc[grouped.groupby('MergeCode')['length'].idxmax()]
+    grouped = intersected.groupby([run_dict["id_field"], 'Code_name'])['length'].sum().reset_index()
+    max_length_subgroup = grouped.loc[grouped.groupby(run_dict["id_field"])['length'].idxmax()]
     intersected = intersected.drop(['Code_name'], axis=1)
-    intersected = intersected.merge(max_length_subgroup[['MergeCode', 'Code_name']], on='MergeCode', how='left')
+    intersected = intersected.merge(max_length_subgroup[[run_dict["id_field"], 'Code_name']], on=run_dict["id_field"], how='left')
     intersected = intersected.merge(subbasins[[c for c in subbasins.columns if c not in ['geometry', 'AreaSqKm']]], on='Code_name', how='left')
     intersected = intersected.drop(['length'], axis=1)
 
@@ -115,9 +115,9 @@ def clip_to_study_area(gdb_path, run_dict):
     nhd.to_file(run_dict['reach_path'])
 
     print('Generating reach metadata table')
-    meta = meta[meta['ReachCode'].isin(nhd['MergeCode'].unique())]
-    subunits = nhd[['MergeCode', 'Code_name']].drop_duplicates().rename(columns={'MergeCode': 'ReachCode'})
-    meta = meta.merge(subunits, how='left', on='ReachCode')
+    meta = meta[meta['ReachCode'].isin(nhd[run_dict["id_field"]].unique())]
+    subunits = nhd[[run_dict["id_field"], 'Code_name']].drop_duplicates()
+    meta = meta.merge(subunits, how='left', left_on='ReachCode', right_on=run_dict["id_field"])
     meta[['8_code', run_dict['subunit_field']]] = meta['Code_name'].str.split('_', expand=True)
     meta[run_dict['unit_field']] = meta['8_code'].map(NAME_DICT)
     meta.to_csv(run_dict['reach_meta_path'], index=False)
@@ -137,5 +137,5 @@ def run_all(meta_path):
 
 
 if __name__ == '__main__':
-    meta_path = r'/netfiles/ciroh/floodplainsData/runs/nwm/run_metadata.json'
+    meta_path = r'/netfiles/ciroh/floodplainsData/runs/6/run_metadata.json'
     run_all(meta_path)
