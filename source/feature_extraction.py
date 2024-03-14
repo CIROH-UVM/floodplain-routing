@@ -100,14 +100,15 @@ def get_edzs(el, el_scaled, rh, rh_prime, widths, thresh=0.5, max_stage=2.5):
 
     # Establish additional params
     max_stage_ind = np.argmax(el_scaled > max_stage)
-    bathymetry_break = np.argmax(widths > widths[0])  # will only work for rectangular cross sections
+    bathymetry_break = np.argmax(widths > widths[0]) - 1  # will only work for rectangular cross sections
     stage_inc = el[1] - el[0]
     stage_inc_scaled = el_scaled[1] - el_scaled[0]
 
     # Define potential EDZs
     edz_bool = (rh_prime < thresh)
     transitions = edz_bool[:-1] != edz_bool[1:]
-    transitions[0] = True
+    # transitions[0] = True
+    transitions = np.insert(transitions, 0, True)
     transitions[-1] = True
     edz_indices = np.argwhere(transitions)[:, 0]
 
@@ -185,8 +186,67 @@ def get_edzs(el, el_scaled, rh, rh_prime, widths, thresh=0.5, max_stage=2.5):
 
     return edzs
 
+def perpendicular_distance(p, p1, p2):
+    """
+    Calculate the perpendicular distance from point p to the line segment defined by points p1 and p2.
+    """
+    x1, y1 = p1
+    x2, y2 = p2
+    dx = x2 - x1
+    dy = y2 - y1
 
-def extract_features(run_path, plot=False):
+    if dx == dy == 0:
+        # The line segment is a point.
+        return np.hypot(p[0] - x1, p[1] - y1)
+
+    u = ((p[0] - x1) * dx + (p[1] - y1) * dy) / (dx * dx + dy * dy)
+    if u < 0:
+        # Closest point is p1.
+        return np.hypot(p[0] - x1, p[1] - y1)
+    elif u > 1:
+        # Closest point is p2.
+        return np.hypot(p[0] - x2, p[1] - y2)
+    else:
+        # Closest point is along the segment.
+        x = x1 + u * dx
+        y = y1 + u * dy
+        return np.hypot(p[0] - x, p[1] - y)
+
+def douglas_peucker(points, tolerance):
+    if len(points) <= 2:
+        return points
+
+    # Find the point with the maximum perpendicular distance
+    max_distance = 0
+    index = 0
+    for i in range(1, len(points) - 1):
+        distance = perpendicular_distance(points[i], points[0], points[-1])
+        if distance > max_distance:
+            max_distance = distance
+            index = i
+
+    # If the maximum perpendicular distance is greater than the tolerance, split the curve and recursively apply the algorithm
+    if max_distance > tolerance:
+        left_segment = douglas_peucker(points[:index + 1], tolerance)
+        right_segment = douglas_peucker(points[index:], tolerance)
+        return left_segment[:-1] + right_segment
+    else:
+        return [points[0], points[-1]]
+
+def reprocess_rhp(el, rh, tol=0.01):
+    points = [(i, j) for i, j in zip(el, rh)]
+    simplified_points = douglas_peucker(points, tol)
+    simp_rh = [i[1] for i in simplified_points]
+    simp_el = [i[0] for i in simplified_points]
+    rh = np.interp(el, simp_el, simp_rh)
+
+    rhp = (rh[1:] - rh[:-1]) / (el[1:] - el[:-1])
+    rhp = np.append(rhp, rhp[-1])
+    rhp = np.nan_to_num(rhp)
+
+    return rhp
+
+def extract_features(run_path, plot=False, subset=None):
     # Load data
     with open(run_path, 'r') as f:
         run_dict = json.loads(f.read())
@@ -232,7 +292,8 @@ def extract_features(run_path, plot=False):
     valid_reaches = valid_reaches.intersection(rh_prime_data.columns)
     valid_reaches = valid_reaches.intersection(area_data.columns)
     valid_reaches = valid_reaches.intersection(volume_data.columns)
-    # valid_reaches = valid_reaches.intersection(['4300103000354', '4300103001161', '4300103000982', '4300103003935', '4300103000593', '4300103001614', '4300103000851', '4300103000774', '4300103001615', '4300102001939', '4300102003887', '4300102003254', '4300102000550', '4300102002497', '4300102002905', '4300102000630', '4300102000677', '4300102000427', '4300102004925', '4300102007625', '4300102001305', '4300102007508', '4300102001169', '4300102007401', '4300102003558', '4300102005816', '4300102001982', '4300102007100', '4300102006177', '4300102003892', '4300102001790', '4300102003372', '4300102000063', '4300102003800', '4300102001600', '4300102000226', '4300102002356', '4300102000793', '4300102006167', '4300102000386', '4300102003504', '4300102000601', '4300102002065', '4300102000098', '4300102000099', '4300102000309', '4300102000219', '4300102000221', '4300107000762', '4300107000695', '4300107001240', '4300107001221', '4300107000086', '4300107000250', '4300107001574', '4300103000937', '4300103000749', '4300103000054', '4300103001199', '4300103001512', '4300108004810', '4300108006384', '4300108005994', '4300108000265', '4300108004999', '4300108006197', '4300108005916', '4300103003276', '4300103002522', '4300103000182', '4300103000516', '4300102006261', '4300102005415', '4300102005384', '4300102002132', '4300102005477', '4300100000000'])
+    if subset:
+        valid_reaches = valid_reaches.intersection(subset)
     valid_reaches = sorted(valid_reaches)
     
     # Extract features
@@ -244,7 +305,8 @@ def extract_features(run_path, plot=False):
         tmp_el = el_data[reach].to_numpy()
         tmp_el_scaled = el_scaled_data[reach].to_numpy()
         tmp_rh = rh_data[reach].to_numpy()
-        tmp_rh_prime = rh_prime_data[reach].to_numpy()
+        tmp_rh_prime = reprocess_rhp(tmp_el, tmp_rh)
+        # tmp_rh_prime = rh_prime_data[reach].to_numpy()
         tmp_area = area_data[reach].to_numpy() / tmp_meta['length']
         tmp_volume = volume_data[reach].to_numpy() / tmp_meta['length']
 
@@ -320,5 +382,7 @@ def extract_features(run_path, plot=False):
 
 
 if __name__ == '__main__':
-    run_path = r'/netfiles/ciroh/floodplainsData/runs/nwm/run_metadata.json'
-    extract_features(run_path, plot=True)
+    run_path = r'/netfiles/ciroh/floodplainsData/runs/6/run_metadata.json'
+    subset = ['4300103004201', '4300103001342', '4300101001766', '4300103004379', '4300103003747', '4300105005363', '4300103001544', '4300107000959', '4300101002118', '4300105002133', '4300103001610', '4300105004505', '4300108010065', '4300101002210', '4300103004018', '4300107002508', '4300107002403', '4300101001930', '4300103001533', '4300103004182', '4300103001950', '4300103005201', '4300103000479', '4300103002798', '4300102002584', '4300103000195', '4300105004967', '4300107001561', '4300107002261', '4300105002860', '4300105001105', '4300103000194', '4300102002233', '4300103001480', '4300102002678', '4300108009146', '4300103001304', '4300103003397', '4300101001605', '4300103001361', '4300108010453', '4300102005480', '4300103003032', '4300105000186', '4300101002194', '4300107002753', '4300103001501', '4300103004766', '4300103002087']
+    subset = None
+    extract_features(run_path, plot=False, subset=subset)
