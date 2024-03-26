@@ -67,7 +67,7 @@ def merge_reaches(gdb_path, run_dict):
     c.execute('DROP TABLE IF EXISTS reach_data')
     c.execute('UPDATE nhdplusflowlinevaa SET slopelenkm=0 WHERE slopelenkm<0')
     c.execute('CREATE TABLE reach_data (ReachCode REAL, TotDASqKm REAL, max_el REAL, min_el REAL, length REAL, slope REAL GENERATED ALWAYS AS (CASE WHEN ((max_el-min_el)/(length*100)) = 0 THEN 0.00001 ELSE ((max_el-min_el)/(length*100)) END) STORED)')
-    c.execute('INSERT INTO reach_data (ReachCode, TotDASqKm, min_el, max_el, length) SELECT reachcode, max(TotDASqKm), min(minelevsmo), max(maxelevsmo), sum(slopelenkm)*1000 FROM nhdplusflowlinevaa GROUP BY reachcode')
+    c.execute('INSERT INTO reach_data (ReachCode, TotDASqKm, min_el, max_el, length) SELECT uvm.reachcode, max(nhd.totdasqkm), min(nhd.minelevsmo), max(nhd.maxelevsmo), sum(nhd.slopelenkm)*1000 FROM nhdplusflowlinevaa nhd JOIN merged uvm ON uvm.nhdplusid = nhd.nhdplusid WHERE nhd.mainstem=1 GROUP BY uvm.reachcode')
     conn.commit()
 
 
