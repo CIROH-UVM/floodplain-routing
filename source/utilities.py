@@ -259,51 +259,53 @@ def extract_topographic_signature(hand_path, aoi_path, slope_path, reaches=None,
         
         plt.close(fig)
 
-def add_bathymetry(geom, da, slope, shape='rectangle'):
+def add_bathymetry(geom, da, slope):
+    dim = geom['el'].shape[0]
+    # 0.015 meters is a reasonable threshold to extract the lidar-based wetted top-width.  Sensitivity analysis by UVM Fall 2023
     filter_arg = np.argmin(geom['el'] < 0.015)
+    filter_arg = max(filter_arg, 2)  # need at least two 
     top_width = geom['area'][filter_arg]
-    top_width = max(top_width, 1)
-    flowrate = (0.4962 * da) / 35.3147
+    #  Use regression of Read et al 2023. https://onlinelibrary.wiley.com/doi/full/10.1111/1752-1688.13134
+    top_width = min(top_width, (2.44 * (da ** 0.34)))  # try to use NWM channel top-width, unless it would lead to decreasing top-width
+    flowrate = (0.4962 * da) / 35.3147  # Diehl Estimate
     n = 0.035
-    stage_space = np.linspace(0, 10, 1000)
+    max_space = 2 * (0.26 * (da ** 0.287))  # Cap at 2xbkfl
+    stage_inc = np.median(geom['el'][1:] - geom['el'][:-1])
+    stage_space = np.arange(0, max_space, stage_inc)
 
-    if shape == 'trapezoid':
-        area = (0.8 * top_width) * stage_space  # Follum 2023 assumed Bw=0.6Tw
-        perimeter = (0.6 * top_width) + (2 * (((stage_space ** 2) + ((0.2 * top_width) ** 2)) ** 0.5))
-        bottom_width = 0.6 * top_width
-    elif shape == 'rectangle':
-        area = (stage_space * top_width)
-        perimeter = (top_width + (2 * stage_space))
-        bottom_width = top_width
+    # Assume rectangular channel
+    area = (stage_space * top_width)
+    perimeter = (top_width + (2 * stage_space))
 
     flowrate_space = (1 / n) * (stage_space * top_width) * (slope ** 0.5) * ((area / perimeter) ** (2 / 3))
-    add_depth = np.interp(flowrate, flowrate_space, stage_space)
-    add_volume = np.interp(flowrate, flowrate_space, area)
-    add_perimeter = np.interp(flowrate, flowrate_space, perimeter)
+    channel_ind = np.argmax(flowrate_space > flowrate)
+    channel_ind = max(channel_ind, filter_arg)  # need at least two points of bathy for a square.  Need at least 0.025m to replace cut out
 
-    # Remove data below 0.015m
-    geom = {i: geom[i][filter_arg:] for i in geom}
+    stage_space = stage_space[:channel_ind]
+    area = area[:channel_ind]
+    perimeter = perimeter[:channel_ind]
 
-    # Replace data below 0.015m
-    replace_el = np.linspace(0, add_depth, filter_arg, endpoint=False)
-    replace_tw = np.linspace(bottom_width, top_width, filter_arg, endpoint=False)
-    replace_vol = ((bottom_width + replace_tw) / 2) * replace_el
-    replace_p = bottom_width + (2 * replace_el)
+    geom['area'] = geom['area'][filter_arg:]
+    geom['area'] = np.insert(geom['area'], 0, np.repeat(top_width, channel_ind))
+    geom['area'] = geom['area'][:dim]
 
-    # Add bathymetry
-    geom['area'] = np.insert(geom['area'], 0, replace_tw)
+    geom['el'] -= geom['el'][filter_arg - 1]  # first data point should be at top of bathymetry
+    geom['el'] = geom['el'][filter_arg:]
+    geom['el'] += stage_space[-1]
+    geom['el'] = np.insert(geom['el'], 0, stage_space)
+    geom['el'] = geom['el'][:dim]
 
-    geom['el'] -= geom['el'][0]  # first data point should be at top of bathymetry
-    geom['el'] += add_depth
-    geom['el'] = np.insert(geom['el'], 0, replace_el)
+    geom['vol'] -= geom['vol'][filter_arg - 1]
+    geom['vol'] = geom['vol'][filter_arg:]
+    geom['vol'] += area[-1]
+    geom['vol'] = np.insert(geom['vol'], 0, area)
+    geom['vol'] = geom['vol'][:dim]
 
-    geom['vol'] -= geom['vol'][0]
-    geom['vol'] += add_volume
-    geom['vol'] = np.insert(geom['vol'], 0, replace_vol)
-
-    geom['p'] -= geom['p'][0]
-    geom['p'] += add_perimeter
-    geom['p'] = np.insert(geom['p'], 0, replace_p)
+    geom['p'] -= geom['p'][filter_arg - 1]
+    geom['p'] = geom['p'][filter_arg:]
+    geom['p'] += perimeter[-1]
+    geom['p'] = np.insert(geom['p'], 0, perimeter)
+    geom['p'] = geom['p'][:dim]
 
     return geom
 
