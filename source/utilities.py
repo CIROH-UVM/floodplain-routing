@@ -105,14 +105,15 @@ def reach_hydraulics(r, thiessens, elevations, slope, el_nd, resolution, bins):
     tmp_elevations = elevations[mask]
     tmp_slope = np.arctan(slope[mask])
     projected_area = (resolution ** 2) / np.cos(tmp_slope)  # Wetted perimeter
+    depth_change = bins[1] - bins[0]
     
     wrk_df = pd.DataFrame({'el': tmp_elevations, 'p': projected_area})
     wrk_df['bins'] = pd.cut(wrk_df['el'], bins=bins, labels=bins[:-1], include_lowest=True)  # Binning a la semivariogram
     wrk_df = wrk_df.groupby(wrk_df['bins'], observed=False).agg(el=('el', 'mean'),
                                                 count=('el', 'count'),
                                                 p=('p', 'sum'))
-    nans = np.isnan(wrk_df['el'])
-    wrk_df.loc[nans, 'el'] = ((bins[:-1] + bins[1:]) / 2)[nans].astype(np.float32)
+    
+    wrk_df['el'] = (bins[:-1] + bins[1:]) / 2
     
     wrk_df['area'] = wrk_df['count'].cumsum()
     wrk_df['area'] -= (wrk_df['count'] * 0.5)  # Center
@@ -120,7 +121,6 @@ def reach_hydraulics(r, thiessens, elevations, slope, el_nd, resolution, bins):
     tmp_p -= (wrk_df['p'] * 0.5)  # Center
     wrk_df['p'] = tmp_p
 
-    depth_change = bins[1] - bins[0]
     vol_increase = depth_change * wrk_df['area']
     wrk_df['vol'] = np.cumsum(vol_increase)
     wrk_df['rh'] = wrk_df['vol'] / wrk_df['p']
@@ -284,6 +284,7 @@ def add_bathymetry(geom, da, slope):
     stage_space = stage_space[:channel_ind]
     area = area[:channel_ind]
     perimeter = perimeter[:channel_ind]
+    area_diff = geom['area'][filter_arg] - top_width
 
     geom['area'] = geom['area'][filter_arg:]
     geom['area'] = np.insert(geom['area'], 0, np.repeat(top_width, channel_ind))
@@ -303,7 +304,7 @@ def add_bathymetry(geom, da, slope):
 
     geom['p'] -= geom['p'][filter_arg - 1]
     geom['p'] = geom['p'][filter_arg:]
-    geom['p'] += perimeter[-1]
+    geom['p'] += perimeter[-1] + area_diff
     geom['p'] = np.insert(geom['p'], 0, perimeter)
     geom['p'] = geom['p'][:dim]
 
