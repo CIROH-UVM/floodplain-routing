@@ -310,6 +310,24 @@ def add_bathymetry(geom, da, slope):
 
     return geom
 
+def calc_celerity(geom, slope):
+    dp = geom['p'][1:] - geom['p'][:-1]
+    dy = geom['el'][1:] - geom['el'][:-1]
+    dp_dy = dp / dy
+    dp_dy[0] = dp_dy[1]
+    dp_dy[np.isnan(dp_dy)] = 0.0001
+    dp_dy = gaussian_filter1d(dp_dy, 15)
+    dp_dy[dp_dy < 0.0001] = 0.0001
+    dp_dy = np.append(dp_dy, dp_dy[-1])
+    k_prime = (5 / 3) - ((2 / 3)*(geom['vol'] / (geom['area'] * geom['p'])) * dp_dy)
+    q = (1 / 0.07) * geom['vol'] * ((geom['vol'] / geom['p']) ** (2 / 3)) * (slope ** 0.5)
+    geom['vol'][0] = geom['vol'][1]
+    celerity = k_prime * (q / geom['vol'])
+    celerity[0] = celerity[1]
+    celerity = np.nan_to_num(celerity)
+    return celerity
+
+
 def map_edz(hand_path, aoi_path, reach_field, reach_data):
     reaches = reach_data[reach_field].unique()
     elevations = load_raster(hand_path)

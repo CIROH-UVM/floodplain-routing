@@ -4,7 +4,7 @@ import pandas as pd
 import geopandas as gpd
 import numpy as np
 import json
-from utilities import subunit_hydraulics, generate_geomorphons, add_bathymetry, map_edz, merge_rasters, reclass_geomorphons_channel, nwm_subunit
+from utilities import subunit_hydraulics, generate_geomorphons, add_bathymetry, map_edz, merge_rasters, reclass_geomorphons_channel, nwm_subunit, calc_celerity
 
 
 def topographic_signatures(meta_path):
@@ -157,6 +157,59 @@ def batch_add_bathymetry(meta_path):
     with open(meta_path, 'w') as f:
         json.dump(run_dict, f)
 
+def batch_add_celerity(meta_path):
+    # Load run config
+    with open(meta_path, 'r') as f:
+        run_dict = json.load(f)
+
+    # Import data
+    geometry = {'el': pd.read_csv(os.path.join(run_dict['geometry_directory'], 'el.csv')),
+                'area': pd.read_csv(os.path.join(run_dict['geometry_directory'], 'area.csv')),
+                'vol': pd.read_csv(os.path.join(run_dict['geometry_directory'], 'vol.csv')),
+                'p': pd.read_csv(os.path.join(run_dict['geometry_directory'], 'p.csv'))}
+    reach_data = pd.read_csv(run_dict['reach_meta_path'])
+    reach_data = reach_data.dropna(subset=['ReachCode'])
+    reach_data['ReachCode'] = reach_data['ReachCode'].astype(np.int64).astype(str)
+    reach_data = reach_data.set_index('ReachCode')
+
+    # Clean input data
+    valid_columns = set(reach_data.index)
+    for col in geometry:
+        valid_columns = valid_columns.intersection(geometry[col].columns)
+    valid_columns = sorted(valid_columns)
+
+    # Setup output frames
+    counter = 1
+    t_start = time.perf_counter()
+    out_dict = dict()
+    
+    for reach in valid_columns:
+        print(f'{counter} / {len(valid_columns)} | {round((len(valid_columns) - counter) * ((time.perf_counter() - t_start) / counter), 1)} seconds left')
+        counter += 1
+        # Subset data
+        tmp_geom = {i: geometry[i][reach].to_numpy() for i in geometry}
+        tmp_meta = reach_data.loc[reach]
+        slope = tmp_meta['slope']
+        length = tmp_meta['length']
+        da = tmp_meta['TotDASqKm']
+
+        if np.all(tmp_geom['area'] == 0):
+            out_dict[reach] = np.repeat(0, len(tmp_geom['area']))
+            continue
+
+        # Convert 3D to 2D perspective
+        tmp_geom['area'] = tmp_geom['area'] / length
+        tmp_geom['vol'] = tmp_geom['vol'] / length
+        tmp_geom['p'] = tmp_geom['p'] / length
+
+        tmp_cel = calc_celerity(tmp_geom, slope)
+
+        out_dict[reach] = tmp_cel
+
+    out_df = pd.DataFrame(out_dict)
+    out_df.to_csv(os.path.join(run_dict['geometry_directory'], 'celerity.csv'), index=False)
+    
+
 
 def scale_stages(reach_data, el_data):
     el_scaled_data = el_data.copy()
@@ -283,8 +336,9 @@ def make_run_template(base_directory='/path/to/data', run_id='1'):
 if __name__ == '__main__':
     # make_run_template(r'/netfiles/ciroh/floodplainsData', '6')
     meta_path = r'/netfiles/ciroh/floodplainsData/runs/6/run_metadata.json'
-    topographic_signatures(meta_path)
-    batch_add_bathymetry(meta_path)
+    # topographic_signatures(meta_path)
+    # batch_add_bathymetry(meta_path)
+    batch_add_celerity(meta_path)
     # map_edzs(meta_path)
 
     # batch_geomorphons(r'/netfiles/ciroh/floodplainsData')
