@@ -19,7 +19,8 @@ def topographic_signatures(meta_path):
         max_stage_equation = lambda da: 10
 
     # Load reaches/basins to run
-    reaches = pd.read_csv(run_dict['reach_meta_path'])
+    reaches = pd.read_csv(run_dict['reach_meta_path'], dtype={'12_code': str})
+    # reaches = reaches[reaches['ReachCode'].isin([4300107001240, 4300107001221, 4300107000250])]
     units = reaches[run_dict['unit_field']].unique()
 
     # Initialize logging
@@ -100,7 +101,7 @@ def batch_add_bathymetry(meta_path):
         valid_columns = valid_columns.intersection(geometry[col].columns)
     valid_columns = sorted(valid_columns)
 
-    # Route
+    # Setup output frames
     counter = 1
     t_start = time.perf_counter()
     out_dfs = {i: pd.DataFrame() for i in geometry}
@@ -116,16 +117,20 @@ def batch_add_bathymetry(meta_path):
         slope = tmp_meta['slope']
         length = tmp_meta['length']
         da = tmp_meta['TotDASqKm']
-        if np.all(tmp_geom['area'] == 0):
-            for i in out_dfs:
-                out_dfs[i][reach] = np.repeat(0, len(tmp_geom['area']))
-                out_dfs[i] = out_dfs[i].copy()
-            continue
 
         # Convert 3D to 2D perspective
         tmp_geom['area'] = tmp_geom['area'] / length
         tmp_geom['vol'] = tmp_geom['vol'] / length
         tmp_geom['p'] = tmp_geom['p'] / length
+
+        # error catching
+        filter_arg = np.argmin(tmp_geom['el'] < 0.015)
+        top_width = tmp_geom['area'][filter_arg]
+        if np.all(tmp_geom['area'] == 0) or top_width < 1:
+            for i in out_dfs:
+                out_dfs[i][reach] = np.repeat(0, len(tmp_geom['area']))
+                out_dfs[i] = out_dfs[i].copy()
+            continue
 
         tmp_geom = add_bathymetry(tmp_geom, da, slope)
 
@@ -147,6 +152,7 @@ def batch_add_bathymetry(meta_path):
 
     for i in out_dfs:
         out_dfs[i].to_csv(os.path.join(run_dict['geometry_directory'], f'{i}.csv'), index=False)
+        continue
     
     with open(meta_path, 'w') as f:
         json.dump(run_dict, f)
@@ -275,10 +281,10 @@ def make_run_template(base_directory='/path/to/data', run_id='1'):
         json.dump(run_metadata, f)
 
 if __name__ == '__main__':
-    # make_run_template(r'/netfiles/ciroh/floodplainsData', 'nwm')
-    meta_path = r'/netfiles/ciroh/floodplainsData/runs/nwm/run_metadata.json'
+    # make_run_template(r'/netfiles/ciroh/floodplainsData', '6')
+    meta_path = r'/netfiles/ciroh/floodplainsData/runs/6/run_metadata.json'
     topographic_signatures(meta_path)
-    # batch_add_bathymetry(meta_path)
+    batch_add_bathymetry(meta_path)
     # map_edzs(meta_path)
 
     # batch_geomorphons(r'/netfiles/ciroh/floodplainsData')
