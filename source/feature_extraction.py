@@ -11,7 +11,7 @@ import json
 with open('source/regressions.json') as in_file:
     REGRESSIONS = json.load(in_file)
 
-FEATURE_NAMES = ['ReachCode', 'ave_rhp', 'stdev_rhp', 'Ave_Rh', 'cumulative_volume', 'cumulative_height', 'valley_confinement', 'el_bathymetry', 'el_edap', 'el_min', 'el_edep', 'el_bathymetry_scaled', 'el_edap_scaled', 'el_min_scaled', 'el_edep_scaled', 'height', 'height_scaled', 'vol', 'vol_scaled', 'min_rhp', 'slope_start_min', 'slope_min_stop', 'rh_bottom', 'rh_edap', 'rh_min', 'rh_edep', 'w_bottom', 'w_edap', 'w_min', 'w_edep', 'invalid_geometry']
+FEATURE_NAMES = ['ReachCode', 'length', 'ave_rhp', 'stdev_rhp', 'Ave_Rh', 'cumulative_volume', 'cumulative_height', 'valley_confinement', 'el_bathymetry', 'el_edap', 'el_min', 'el_edep', 'el_bathymetry_scaled', 'el_edap_scaled', 'el_min_scaled', 'el_edep_scaled', 'height', 'height_scaled', 'vol', 'vol_scaled', 'min_rhp', 'slope_start_min', 'slope_min_stop', 'rh_bottom', 'rh_edap', 'rh_min', 'rh_edep', 'w_bottom', 'w_edap', 'w_min', 'w_edep', 'edz_count', 'min_loc_ratio', 'rhp_pre', 'rhp_post', 'rhp_post_stdev', 'invalid_geometry', 'regression_valley_confinement']
 ERROR_ARRAY = [np.nan for i in FEATURE_NAMES]
 
 class ReachPlot:
@@ -84,6 +84,11 @@ class ReachPlot:
             self.rhp_ax.axhline(norm_stage, c='c', alpha=0.3, ls='dashed')
             self.rhp_ax.text(-1, norm_stage, reg, horizontalalignment='left', verticalalignment='bottom', fontsize='xx-small')
 
+    def add_spline_rh(self, spl_dict):
+        self.rh_ax.plot(spl_dict['rh_appr'], spl_dict['el_scaled'], c='darkorange', lw=1, alpha=0.7, zorder=4)
+        self.rh_ax.scatter(spl_dict['simp_rh'], spl_dict['simp_el_scaled'], c='darkorange', alpha=0.7, zorder=3, s=4)
+
+
     def save(self, dpi=100):
         # update extents
         if self.has_geom:
@@ -148,7 +153,10 @@ def get_edzs(el, el_scaled, rh, rh_prime, widths, thresh=0.5, max_stage=2.5):
         el_argmin = el[argmin]
         el_argmin_scaled = el_scaled[argmin]
 
-        slope_start_min = (min_val - thresh) / (el_argmin - start_el)
+        if argmin == start:
+            slope_start_min = (min_val - thresh) / (el[argmin + 1] - start_el)
+        else:
+            slope_start_min = (min_val - thresh) / (el_argmin - start_el)
         slope_min_stop = (thresh - min_val) / (stop_el - el_argmin)
 
         rh_bottom = rh[max(bathymetry_break - 1, 0)]
@@ -237,18 +245,27 @@ def douglas_peucker(points, tolerance):
     else:
         return [points[0], points[-1]]
 
-def reprocess_rhp(el, rh, tol=0.01):
+def reprocess_rhp(el, rh, tol=0.01, smooth=True):
     points = [(i, j) for i, j in zip(el, rh)]
     simplified_points = douglas_peucker(points, tol)
     simp_rh = [i[1] for i in simplified_points]
     simp_el = [i[0] for i in simplified_points]
-    el_inc = np.median(el[1:] - el[:-1])
-    el_fit = np.arange(0, max(el), el_inc)
+    # el_inc = np.median(el[1:] - el[:-1])
+    # el_fit = np.arange(0, max(el), el_inc)
+    el_fit = el
     rh_fit = np.interp(el_fit, simp_el, simp_rh)
-    spl = splrep(el_fit, rh_fit, t=simp_el[1:-1])
+    if smooth:
+        spl = splrep(el_fit, rh_fit, t=simp_el[1:-1])
+    else:
+        spl = splrep(el_fit, rh_fit, s=0)
     rhp = splev(el, spl, der=1)
 
-    return rhp
+    spl_dict = {'spl': spl,
+                'simp_rh': simp_rh,
+                'simp_el': simp_el,
+                'el': el,
+                'rh_appr': splev(el, spl)}
+    return rhp, spl_dict
 
 def extract_features(run_path, plot=False, subset=None):
     # Load data
@@ -309,7 +326,7 @@ def extract_features(run_path, plot=False, subset=None):
         tmp_el = el_data[reach].to_numpy()
         tmp_el_scaled = el_scaled_data[reach].to_numpy()
         tmp_rh = rh_data[reach].to_numpy()
-        # tmp_rh_prime = rh_prime_data[reach].to_numpy()
+        tmp_rh_prime = rh_prime_data[reach].to_numpy()
         tmp_area = area_data[reach].to_numpy() / tmp_meta['length']
         tmp_volume = volume_data[reach].to_numpy() / tmp_meta['length']
 
@@ -327,14 +344,18 @@ def extract_features(run_path, plot=False, subset=None):
             tmp_features[-1] = 1
             features.append(tmp_features)
             continue
-
-        tmp_rh_prime = reprocess_rhp(tmp_el, tmp_rh)
-
+        
         # Process
         thresh = 0.5
         max_stage = 2.5
         
         edzs = get_edzs(tmp_el, tmp_el_scaled, tmp_rh, tmp_rh_prime, tmp_area, thresh, max_stage)
+        q = (1 / 0.07) * tmp_volume * (tmp_rh ** (2 / 3)) * (tmp_meta['slope'] ** 0.5)
+        q500 = REGRESSIONS['peak_flowrate']['Q500'][0] * ((tmp_meta['TotDASqKm'] / 2.59) ** REGRESSIONS['peak_flowrate']['Q500'][1]) * (1 / 35.3147)
+        q500_ind = np.argmax(q > q500)
+        q500_w = tmp_area[q500_ind]
+        bkf_w = 3.12 * (tmp_meta['TotDASqKm'] ** 0.415)
+        regression_valley_confinement = q500_w / bkf_w
 
         # Generate general stats
         edz_count = len(edzs)
@@ -351,20 +372,26 @@ def extract_features(run_path, plot=False, subset=None):
         if edz_count == 0:
             tmp_features = ERROR_ARRAY.copy()
             tmp_features[0] = reach
-            tmp_features[1] = ave
-            tmp_features[2] = stdev
-            tmp_features[3] = 0
-            tmp_features[4] = 0
-            tmp_features[5] = 1
-            tmp_features[6] = el_bathymetry
-            tmp_features[10] = el_bathymetry_scaled
+            tmp_features[2] = ave
+            tmp_features[3] = stdev
+            tmp_features[4] = ave_rh
+            tmp_features[5] = 0
+            tmp_features[6] = 0
+            tmp_features[7] = 1
+            tmp_features[8] = el_bathymetry
+            tmp_features[12] = el_bathymetry_scaled
+            tmp_features[-1] = regression_valley_confinement
             main_edz = None
             features.append(tmp_features)
         else:
             main_edz_ind = [i for v, i in sorted(zip(edz_vols, edzs.keys()), reverse=True)][0]
             main_edz = edzs[main_edz_ind]
             valley_confinement = main_edz['w_edep'] / main_edz['w_edap']
-            features.append([reach, ave, stdev, ave_rh, cum_vol, cum_height, valley_confinement, el_bathymetry, main_edz['start_el'], main_edz['min_el'], main_edz['stop_el'], el_bathymetry_scaled, main_edz['start_el_scaled'], main_edz['min_el_scaled'], main_edz['stop_el_scaled'], main_edz['height'], main_edz['height_scaled'], main_edz['volume'], main_edz['vol_scaled'], main_edz['min_val'], main_edz['slope_start_min'], main_edz['slope_min_stop'], main_edz['rh_bottom'], main_edz['rh_edap'], main_edz['rh_min'], main_edz['rh_edep'], main_edz['w_bottom'], main_edz['w_edap'], main_edz['w_min'], main_edz['w_edep'], 0])
+            min_loc_ratio = (main_edz['min_el'] - main_edz['start_el']) / main_edz['height']
+            rhp_pre = tmp_rh_prime[:main_edz['start_ind']].mean()
+            rhp_post = tmp_rh_prime[main_edz['stop_ind']:].mean()
+            rhp_post_stdev = tmp_rh_prime[main_edz['stop_ind']:].std()
+            features.append([reach, tmp_meta['length'], ave, stdev, ave_rh, cum_vol, cum_height, valley_confinement, el_bathymetry, main_edz['start_el'], main_edz['min_el'], main_edz['stop_el'], el_bathymetry_scaled, main_edz['start_el_scaled'], main_edz['min_el_scaled'], main_edz['stop_el_scaled'], main_edz['height'], main_edz['height_scaled'], main_edz['volume'], main_edz['vol_scaled'], main_edz['min_val'], main_edz['slope_start_min'], main_edz['slope_min_stop'], main_edz['rh_bottom'], main_edz['rh_edap'], main_edz['rh_min'], main_edz['rh_edep'], main_edz['w_bottom'], main_edz['w_edap'], main_edz['w_min'], main_edz['w_edep'], edz_count, min_loc_ratio, rhp_pre, rhp_post, rhp_post_stdev, 0, regression_valley_confinement])
 
         if plot:
             reach_plot.add_geometry(tmp_el_scaled, tmp_area, tmp_rh, tmp_rh_prime, ave)
@@ -390,5 +417,5 @@ def extract_features(run_path, plot=False, subset=None):
 
 if __name__ == '__main__':
     run_path = r'/netfiles/ciroh/floodplainsData/runs/6/run_metadata.json'
-    subset = ['4300103004201', '4300103001342', '4300101001766', '4300103004379', '4300103003747', '4300105005363', '4300103001544', '4300107000959', '4300101002118', '4300105002133', '4300103001610', '4300105004505', '4300108010065', '4300101002210', '4300103004018', '4300107002508', '4300107002403', '4300101001930', '4300103001533', '4300103004182', '4300103001950', '4300103005201', '4300103000479', '4300103002798', '4300102002584', '4300103000195', '4300105004967', '4300107001561', '4300107002261', '4300105002860', '4300105001105', '4300103000194', '4300102002233', '4300103001480', '4300102002678', '4300108009146', '4300103001304', '4300103003397', '4300101001605', '4300103001361', '4300108010453', '4300102005480', '4300103003032', '4300105000186', '4300101002194', '4300107002753', '4300103001501', '4300103004766', '4300103002087']
+    subset = ['4300101000062']
     extract_features(run_path, plot=False, subset=None)
