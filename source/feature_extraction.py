@@ -282,8 +282,8 @@ def extract_features(run_path, plot=False, subset=None):
 
     reach_data = pd.read_csv(reach_path)
     reach_data = reach_data.dropna(axis=0)
-    reach_data['ReachCode'] = reach_data['ReachCode'].astype(np.int64).astype(str)
-    reach_data = reach_data.set_index('ReachCode')
+    reach_data[run_dict['id_field']] = reach_data[run_dict['id_field']].astype(np.int64).astype(str)
+    reach_data = reach_data.set_index(run_dict['id_field'])
 
     el_data = pd.read_csv(el_path)
     el_data = el_data.dropna(axis=1)
@@ -407,10 +407,10 @@ def extract_features(run_path, plot=False, subset=None):
         merge_df = run_dict['muskingum_path']
 
         merge_df = pd.read_csv(merge_df)
-        merge_df['ReachCode'] = merge_df['ReachCode'].astype(int).astype(str)
+        merge_df[run_dict['id_field']] = merge_df[run_dict['id_field']].astype(int).astype(str)
 
         out_df = pd.DataFrame(features, columns=FEATURE_NAMES)
-        out_df = merge_df.merge(out_df, how='inner', on='ReachCode')
+        out_df = merge_df.merge(out_df, how='inner', on=run_dict['id_field'])
     else:
         out_df = pd.DataFrame(features, columns=FEATURE_NAMES)
     os.makedirs(os.path.dirname(run_dict['analysis_path']), exist_ok=True)
@@ -418,6 +418,6 @@ def extract_features(run_path, plot=False, subset=None):
 
 
 if __name__ == '__main__':
-    run_path = r'/netfiles/ciroh/floodplainsData/runs/6/run_metadata.json'
+    run_path = r'/netfiles/ciroh/floodplainsData/runs/hydrofabric/run_metadata.json'
     subset = ['4300103003398']
     extract_features(run_path, plot=False, subset=None)

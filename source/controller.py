@@ -73,8 +73,8 @@ def topographic_signatures(meta_path):
     for f in run_dict['fields_of_interest']:
         data_dict[f] = pd.concat(data_dict[f], axis=1)
         data_dict[f].to_csv(os.path.join(run_dict['geometry_directory'], f'{f}.csv'), index=False)
-    reaches['ReachCode'] = reaches['ReachCode'].astype(np.int64).astype(str)
-    reaches = reaches.set_index('ReachCode')
+    reaches[run_dict['id_field']] = reaches[run_dict['id_field']].astype(np.int64).astype(str)
+    reaches = reaches.set_index(run_dict['id_field'])
     data_dict['el_scaled'] = scale_stages(reaches, data_dict['el'])
     data_dict['el_scaled'].to_csv(os.path.join(run_dict['geometry_directory'], 'el_scaled.csv'), index=False)
     print('Finished saving')
@@ -91,9 +91,9 @@ def batch_add_bathymetry(meta_path):
                 'vol': pd.read_csv(os.path.join(run_dict['geometry_directory'], 'vol.csv')),
                 'p': pd.read_csv(os.path.join(run_dict['geometry_directory'], 'p.csv'))}
     reach_data = pd.read_csv(run_dict['reach_meta_path'])
-    reach_data = reach_data.dropna(subset=['ReachCode'])
-    reach_data['ReachCode'] = reach_data['ReachCode'].astype(np.int64).astype(str)
-    reach_data = reach_data.set_index('ReachCode')
+    reach_data = reach_data.dropna(subset=[run_dict['id_field']])
+    reach_data[run_dict['id_field']] = reach_data[run_dict['id_field']].astype(np.int64).astype(str)
+    reach_data = reach_data.set_index(run_dict['id_field'])
 
     # Clean input data
     valid_columns = set(reach_data.index)
@@ -168,9 +168,9 @@ def batch_add_celerity(meta_path):
                 'vol': pd.read_csv(os.path.join(run_dict['geometry_directory'], 'vol.csv')),
                 'p': pd.read_csv(os.path.join(run_dict['geometry_directory'], 'p.csv'))}
     reach_data = pd.read_csv(run_dict['reach_meta_path'])
-    reach_data = reach_data.dropna(subset=['ReachCode'])
-    reach_data['ReachCode'] = reach_data['ReachCode'].astype(np.int64).astype(str)
-    reach_data = reach_data.set_index('ReachCode')
+    reach_data = reach_data.dropna(subset=[run_dict['id_field']])
+    reach_data[run_dict['id_field']] = reach_data[run_dict['id_field']].astype(np.int64).astype(str)
+    reach_data = reach_data.set_index(run_dict['id_field'])
 
     # Clean input data
     valid_columns = set(reach_data.index)
@@ -334,8 +334,8 @@ def make_run_template(base_directory='/path/to/data', run_id='1'):
         json.dump(run_metadata, f)
 
 if __name__ == '__main__':
-    # make_run_template(r'/netfiles/ciroh/floodplainsData', '6')
-    meta_path = r'/netfiles/ciroh/floodplainsData/runs/6/run_metadata.json'
+    # make_run_template(r'/netfiles/ciroh/floodplainsData', 'hydrofabric')
+    meta_path = r'/netfiles/ciroh/floodplainsData/runs/hydrofabric/run_metadata.json'
     # topographic_signatures(meta_path)
     # batch_add_bathymetry(meta_path)
     batch_add_celerity(meta_path)
