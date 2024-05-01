@@ -11,8 +11,9 @@ import json
 with open('source/regressions.json') as in_file:
     REGRESSIONS = json.load(in_file)
 
-FEATURE_NAMES = ['ReachCode', 'length', 'ave_rhp', 'stdev_rhp', 'Ave_Rh', 'cumulative_volume', 'cumulative_height', 'valley_confinement', 'el_bathymetry', 'el_edap', 'el_min', 'el_edep', 'el_bathymetry_scaled', 'el_edap_scaled', 'el_min_scaled', 'el_edep_scaled', 'height', 'height_scaled', 'vol', 'vol_scaled', 'min_rhp', 'slope_start_min', 'slope_min_stop', 'rh_bottom', 'rh_edap', 'rh_min', 'rh_edep', 'w_bottom', 'w_edap', 'w_min', 'w_edep', 'edz_count', 'min_loc_ratio', 'rhp_pre', 'rhp_post', 'rhp_post_stdev', 'invalid_geometry', 'regression_valley_confinement', 'streamorder']
+FEATURE_NAMES = ['length', 'slope', 'DASqKm', 'ave_rhp', 'stdev_rhp', 'Ave_Rh', 'cumulative_volume', 'cumulative_height', 'valley_confinement', 'el_bathymetry', 'el_edap', 'el_min', 'el_edep', 'el_bathymetry_scaled', 'el_edap_scaled', 'el_min_scaled', 'el_edep_scaled', 'height', 'height_scaled', 'vol', 'vol_scaled', 'min_rhp', 'slope_start_min', 'slope_min_stop', 'rh_bottom', 'rh_edap', 'rh_min', 'rh_edep', 'w_bottom', 'w_edap', 'w_min', 'w_edep', 'edz_count', 'min_loc_ratio', 'rhp_pre', 'rhp_post', 'rhp_post_stdev', 'invalid_geometry', 'regression_valley_confinement', 'streamorder']
 ERROR_ARRAY = [np.nan for i in FEATURE_NAMES]
+ERROR_DICT = {k: np.nan for k in FEATURE_NAMES}
 
 class ReachPlot:
 
@@ -318,7 +319,7 @@ def extract_features(run_path, plot=False, subset=None):
     valid_reaches = sorted(valid_reaches)
     
     # Extract features
-    features = list()
+    features = pd.DataFrame(columns=FEATURE_NAMES, index=valid_reaches)
     for reach in list(valid_reaches):
         print(reach)
         # Subset data
@@ -339,10 +340,7 @@ def extract_features(run_path, plot=False, subset=None):
         if np.all(tmp_area == 0):
             if plot:
                 reach_plot.no_geometry()
-            tmp_features = ERROR_ARRAY.copy()
-            tmp_features[0] = reach
-            tmp_features[-1] = 1
-            features.append(tmp_features)
+            features.loc[reach, 'invalid_geometry'] = 1
             continue
         
         # Process
@@ -371,20 +369,23 @@ def extract_features(run_path, plot=False, subset=None):
         stdev = np.nanstd(tmp_rh_prime)
         ave_rh = np.nanmean(tmp_rh)
 
+        features.loc[reach, 'length'] = tmp_meta['length']
+        features.loc[reach, 'slope'] = tmp_meta['slope']
+        features.loc[reach, 'DASqKm'] = tmp_meta['TotDASqKm']
+        features.loc[reach, 'ave_rhp'] = ave
+        features.loc[reach, 'stdev_rhp'] = stdev
+        features.loc[reach, 'Ave_Rh'] = ave_rh
+        features.loc[reach, 'regression_valley_confinement'] = regression_valley_confinement
+        features.loc[reach, 'streamorder'] = tmp_meta['s_order']
         if edz_count == 0:
-            tmp_features = ERROR_ARRAY.copy()
-            tmp_features[0] = reach
-            tmp_features[2] = ave
-            tmp_features[3] = stdev
-            tmp_features[4] = ave_rh
-            tmp_features[5] = 0
-            tmp_features[6] = 0
-            tmp_features[7] = 1
-            tmp_features[8] = el_bathymetry
-            tmp_features[12] = el_bathymetry_scaled
-            tmp_features[-2] = regression_valley_confinement
+            features.loc[reach, 'cumulative_volume'] = 0
+            features.loc[reach, 'cumulative_height'] = 0
+            features.loc[reach, 'valley_confinement'] = 1
+            features.loc[reach, 'el_bathymetry'] = el_bathymetry
+            features.loc[reach, 'el_bathymetry_scaled'] = el_bathymetry_scaled
+            features.loc[reach, 'edz_count'] = 0
+
             main_edz = None
-            features.append(tmp_features)
         else:
             main_edz_ind = [i for v, i in sorted(zip(edz_vols, edzs.keys()), reverse=True)][0]
             main_edz = edzs[main_edz_ind]
@@ -393,7 +394,39 @@ def extract_features(run_path, plot=False, subset=None):
             rhp_pre = tmp_rh_prime[:main_edz['start_ind']].mean()
             rhp_post = tmp_rh_prime[main_edz['stop_ind']:].mean()
             rhp_post_stdev = tmp_rh_prime[main_edz['stop_ind']:].std()
-            features.append([reach, tmp_meta['length'], ave, stdev, ave_rh, cum_vol, cum_height, valley_confinement, el_bathymetry, main_edz['start_el'], main_edz['min_el'], main_edz['stop_el'], el_bathymetry_scaled, main_edz['start_el_scaled'], main_edz['min_el_scaled'], main_edz['stop_el_scaled'], main_edz['height'], main_edz['height_scaled'], main_edz['volume'], main_edz['vol_scaled'], main_edz['min_val'], main_edz['slope_start_min'], main_edz['slope_min_stop'], main_edz['rh_bottom'], main_edz['rh_edap'], main_edz['rh_min'], main_edz['rh_edep'], main_edz['w_bottom'], main_edz['w_edap'], main_edz['w_min'], main_edz['w_edep'], edz_count, min_loc_ratio, rhp_pre, rhp_post, rhp_post_stdev, 0, regression_valley_confinement, tmp_meta['s_order']])
+
+            features.loc[reach, 'cumulative_volume'] = cum_vol
+            features.loc[reach, 'cumulative_height'] = cum_height
+            features.loc[reach, 'valley_confinement'] = valley_confinement
+            features.loc[reach, 'el_bathymetry'] = el_bathymetry
+            features.loc[reach, 'el_edap'] = main_edz['start_el']
+            features.loc[reach, 'el_min'] = main_edz['min_el']
+            features.loc[reach, 'el_edep'] = main_edz['stop_el']
+            features.loc[reach, 'el_bathymetry_scaled'] = el_bathymetry_scaled
+            features.loc[reach, 'el_edap_scaled'] = main_edz['start_el_scaled']
+            features.loc[reach, 'el_min_scaled'] = main_edz['min_el_scaled']
+            features.loc[reach, 'el_edep_scaled'] = main_edz['stop_el_scaled']
+            features.loc[reach, 'height'] = main_edz['height']
+            features.loc[reach, 'height_scaled'] = main_edz['height_scaled']
+            features.loc[reach, 'vol'] = main_edz['volume']
+            features.loc[reach, 'vol_scaled'] = main_edz['vol_scaled']
+            features.loc[reach, 'min_rhp'] = main_edz['min_val']
+            features.loc[reach, 'slope_start_min'] = main_edz['slope_start_min']
+            features.loc[reach, 'slope_min_stop'] = main_edz['slope_min_stop']
+            features.loc[reach, 'rh_bottom'] = main_edz['rh_bottom']
+            features.loc[reach, 'rh_edap'] = main_edz['rh_edap']
+            features.loc[reach, 'rh_min'] = main_edz['rh_min']
+            features.loc[reach, 'rh_edep'] = main_edz['rh_edep']
+            features.loc[reach, 'w_bottom'] = main_edz['w_bottom']
+            features.loc[reach, 'w_edap'] = main_edz['w_edap']
+            features.loc[reach, 'w_min'] = main_edz['w_min']
+            features.loc[reach, 'w_edep'] = main_edz['w_edep']
+            features.loc[reach, 'edz_count'] = edz_count
+            features.loc[reach, 'min_loc_ratio'] = min_loc_ratio
+            features.loc[reach, 'rhp_pre'] = rhp_pre
+            features.loc[reach, 'rhp_post'] = rhp_post
+            features.loc[reach, 'rhp_post_stdev'] = rhp_post_stdev
+            features.loc[reach, 'invalid_geometry'] = 0
 
         if plot:
             reach_plot.add_geometry(tmp_el_scaled, tmp_area, tmp_rh, tmp_rh_prime, ave)
@@ -409,12 +442,11 @@ def extract_features(run_path, plot=False, subset=None):
         merge_df = pd.read_csv(merge_df)
         merge_df[run_dict['id_field']] = merge_df[run_dict['id_field']].astype(int).astype(str)
 
-        out_df = pd.DataFrame(features, columns=FEATURE_NAMES)
-        out_df = merge_df.merge(out_df, how='inner', on=run_dict['id_field'])
+        out_df = merge_df.merge(features, how='inner', on=run_dict['id_field'])
     else:
-        out_df = pd.DataFrame(features, columns=FEATURE_NAMES)
+        out_df = features
     os.makedirs(os.path.dirname(run_dict['analysis_path']), exist_ok=True)
-    out_df.to_csv(run_dict['analysis_path'], index=False)
+    out_df.to_csv(run_dict['analysis_path'], index_label=run_dict['id_field'])
 
 
 if __name__ == '__main__':
