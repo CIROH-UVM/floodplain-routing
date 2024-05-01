@@ -325,6 +325,7 @@ def calc_celerity(geom, slope):
     celerity = k_prime * (q / geom['vol'])
     celerity[0] = celerity[1]
     celerity = np.nan_to_num(celerity)
+    celerity[celerity <= 0] = 0.0001
     return celerity
 
 
