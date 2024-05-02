@@ -11,7 +11,7 @@ import json
 with open('source/regressions.json') as in_file:
     REGRESSIONS = json.load(in_file)
 
-FEATURE_NAMES = ['length', 'slope', 'DASqKm', 'ave_rhp', 'stdev_rhp', 'Ave_Rh', 'cumulative_volume', 'cumulative_height', 'valley_confinement', 'el_bathymetry', 'el_edap', 'el_min', 'el_edep', 'el_bathymetry_scaled', 'el_edap_scaled', 'el_min_scaled', 'el_edep_scaled', 'height', 'height_scaled', 'vol', 'vol_scaled', 'min_rhp', 'slope_start_min', 'slope_min_stop', 'rh_bottom', 'rh_edap', 'rh_min', 'rh_edep', 'w_bottom', 'w_edap', 'w_min', 'w_edep', 'edz_count', 'min_loc_ratio', 'rhp_pre', 'rhp_post', 'rhp_post_stdev', 'invalid_geometry', 'regression_valley_confinement', 'streamorder']
+FEATURE_NAMES = ['length', 'slope', 'DASqKm', 'wbody', 'ave_rhp', 'stdev_rhp', 'Ave_Rh', 'cumulative_volume', 'cumulative_height', 'valley_confinement', 'el_bathymetry', 'el_edap', 'el_min', 'el_edep', 'el_bathymetry_scaled', 'el_edap_scaled', 'el_min_scaled', 'el_edep_scaled', 'height', 'height_scaled', 'vol', 'vol_scaled', 'min_rhp', 'slope_start_min', 'slope_min_stop', 'rh_bottom', 'rh_edap', 'rh_min', 'rh_edep', 'w_bottom', 'w_edap', 'w_min', 'w_edep', 'edz_count', 'min_loc_ratio', 'rhp_pre', 'rhp_post', 'rhp_post_stdev', 'invalid_geometry', 'regression_valley_confinement', 'streamorder']
 ERROR_ARRAY = [np.nan for i in FEATURE_NAMES]
 ERROR_DICT = {k: np.nan for k in FEATURE_NAMES}
 
@@ -372,11 +372,13 @@ def extract_features(run_path, plot=False, subset=None):
         features.loc[reach, 'length'] = tmp_meta['length']
         features.loc[reach, 'slope'] = tmp_meta['slope']
         features.loc[reach, 'DASqKm'] = tmp_meta['TotDASqKm']
+        features.loc[reach, 'wbody'] = tmp_meta['wbody']
         features.loc[reach, 'ave_rhp'] = ave
         features.loc[reach, 'stdev_rhp'] = stdev
         features.loc[reach, 'Ave_Rh'] = ave_rh
         features.loc[reach, 'regression_valley_confinement'] = regression_valley_confinement
         features.loc[reach, 'streamorder'] = tmp_meta['s_order']
+        features.loc[reach, 'invalid_geometry'] = 0
         if edz_count == 0:
             features.loc[reach, 'cumulative_volume'] = 0
             features.loc[reach, 'cumulative_height'] = 0
@@ -384,7 +386,6 @@ def extract_features(run_path, plot=False, subset=None):
             features.loc[reach, 'el_bathymetry'] = el_bathymetry
             features.loc[reach, 'el_bathymetry_scaled'] = el_bathymetry_scaled
             features.loc[reach, 'edz_count'] = 0
-
             main_edz = None
         else:
             main_edz_ind = [i for v, i in sorted(zip(edz_vols, edzs.keys()), reverse=True)][0]
@@ -426,7 +427,6 @@ def extract_features(run_path, plot=False, subset=None):
             features.loc[reach, 'rhp_pre'] = rhp_pre
             features.loc[reach, 'rhp_post'] = rhp_post
             features.loc[reach, 'rhp_post_stdev'] = rhp_post_stdev
-            features.loc[reach, 'invalid_geometry'] = 0
 
         if plot:
             reach_plot.add_geometry(tmp_el_scaled, tmp_area, tmp_rh, tmp_rh_prime, ave)
@@ -440,9 +440,11 @@ def extract_features(run_path, plot=False, subset=None):
         merge_df = run_dict['muskingum_path']
 
         merge_df = pd.read_csv(merge_df)
-        merge_df[run_dict['id_field']] = merge_df[run_dict['id_field']].astype(int).astype(str)
+        merge_df[run_dict['id_field']] = merge_df['ReachCode'].astype(int).astype(str)
+        merge_df = merge_df.set_index(run_dict['id_field'])
+        merge_df = merge_df.drop(columns=['ReachCode', 'DASqKm', 'slope'])
 
-        out_df = merge_df.merge(features, how='inner', on=run_dict['id_field'])
+        out_df = merge_df.merge(features, how='inner', left_index=True, right_index=True)
     else:
         out_df = features
     os.makedirs(os.path.dirname(run_dict['analysis_path']), exist_ok=True)
@@ -450,6 +452,6 @@ def extract_features(run_path, plot=False, subset=None):
 
 
 if __name__ == '__main__':
-    run_path = r'/netfiles/ciroh/floodplainsData/runs/hydrofabric/run_metadata.json'
-    subset = ['4300103003398']
+    run_path = r'/netfiles/ciroh/floodplainsData/runs/7/run_metadata.json'
+    subset = ['4300103000694']
     extract_features(run_path, plot=False, subset=None)
