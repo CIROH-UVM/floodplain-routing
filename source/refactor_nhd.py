@@ -8,7 +8,7 @@ import sqlite3
 import geopandas as gpd
 import pandas as pd
 import json
-
+from collections import defaultdict
 
 OGR_PATH = os.path.join(sys.prefix, 'bin', 'ogr2ogr')
 MANUAL_OVERRIDE = {'60000200057445': '4300102000489',
@@ -43,7 +43,7 @@ def download_data(run_dict):
     return out_path
 
 
-def merge_reaches(gdb_path, run_dict):
+def merge_reaches(gdb_path, run_dict, merge_short=False):
     # merge small DA reaches with d/s reachcode
     print('Exporting VAA table from GDB')
     subprocess.run([OGR_PATH, '-f', 'SQLite', run_dict['network_db_path'], gdb_path, 'NHDPlusFlowlineVAA'])
@@ -64,12 +64,81 @@ def merge_reaches(gdb_path, run_dict):
     [c.execute(q) for q in refactor]
     conn.commit()
 
+    if merge_short:
+        print('Merging short reaches')
+        merge_short_reaches(conn, c)
+
     c.execute('DROP TABLE IF EXISTS reach_data')
     c.execute('UPDATE nhdplusflowlinevaa SET slopelenkm=0 WHERE slopelenkm<0')
     c.execute('CREATE TABLE reach_data (ReachCode REAL, TotDASqKm REAL, max_el REAL, min_el REAL, length REAL, s_order INTEGER, slope REAL GENERATED ALWAYS AS (CASE WHEN ((max_el-min_el)/(length*100)) = 0 THEN 0.00001 ELSE ((max_el-min_el)/(length*100)) END) STORED)')
     c.execute('INSERT INTO reach_data (ReachCode, TotDASqKm, min_el, max_el, length, s_order) SELECT uvm.reachcode, max(nhd.totdasqkm), min(nhd.minelevsmo), max(nhd.maxelevsmo), sum(nhd.slopelenkm)*1000, max(nhd.streamorde) FROM nhdplusflowlinevaa nhd JOIN merged uvm ON uvm.nhdplusid = nhd.nhdplusid WHERE nhd.mainstem=1 GROUP BY uvm.reachcode')
     conn.commit()
 
+def merge_short_reaches(conn, c, length_threshold=300):
+    # Traverse the network in a postorder fashion to identify reaches with length less than 300 meters and merges them with the downstream reach
+    mainstems = pd.read_sql_query("SELECT fromnode, tonode, reachcode, slopelenkm from nhdplusflowlinevaa where mainstem = 1", conn)
+    mainstems['fromnode'] = mainstems['fromnode'].astype(int).astype(str)
+    mainstems['tonode'] = mainstems['tonode'].astype(int).astype(str)
+    mainstems['reachcode'] = mainstems['reachcode'].astype(int).astype(str)
+    # tonode is d/s end of reach, fromnode is u/s end of reach
+    mainstems['length'] = mainstems['slopelenkm'] * 1000
+    mainstems = mainstems.drop(['slopelenkm'], axis=1)
+
+    # refactor to reachcode level and create new dictionary versions of the network
+    edge_dict = defaultdict(list)
+    meta_dict = dict()
+    reachcodes = mainstems['reachcode'].unique()
+    for r in reachcodes:
+        tmp = mainstems[mainstems['reachcode'] == r]
+        froms = set(tmp['fromnode'])
+        tos = set(tmp['tonode'])
+        us = froms.difference(tos).pop()
+        ds = tos.difference(froms).pop()
+        tmp_length = tmp['length'].sum()
+        edge_dict[ds].append(us)
+        meta_dict[us] = {'l': tmp_length, 'reachcode': r, 'ds': ds}
+
+    # Find root nodes
+    all_nodes = list()
+    [all_nodes.extend(v) for v in edge_dict.values()]
+    root_nodes = set(edge_dict.keys()).difference(set(all_nodes))
+    q = list(root_nodes)
+
+    # Traverse the network in postorder
+    conversions = dict()
+    visited = set()
+    merge_length = 0
+    merge_ids = list()
+    while q:
+        cur_node = q[-1]
+        children = edge_dict[cur_node]
+        if all([n in visited for n in children]) or all([n not in edge_dict for n in children]):
+            tmp_l = meta_dict[cur_node]['l']
+            tmp_r = meta_dict[cur_node]['reachcode']
+            # Check for reaches in the stack
+            if len(merge_ids) == 0:
+                if tmp_l < length_threshold:
+                    merge_length += tmp_l
+                    merge_ids.append(tmp_r)
+            else:
+                # Check if the reach is short or a confluence
+                if tmp_l + merge_length >= length_threshold or len(children) > 1:
+                    conversions[tmp_r] = merge_ids
+                    merge_length = 0
+                    merge_ids = list()
+                else:
+                    merge_length += tmp_l
+                    merge_ids.append(tmp_r)        
+            q.pop()
+            visited.add(cur_node)
+            continue
+        for n in children:
+            q.append(n)
+
+    # Merge short reaches
+    for k, v in conversions.items():
+        c.execute(f"UPDATE merged SET ReachCode={k} WHERE ReachCode IN ({','.join([str(i) for i in v])})")
+    conn.commit()
 
 def clip_to_study_area(gdb_path, run_dict, water_toggle=0.05):
     # Clip flowlines and subcatchments to catchments of interest
@@ -142,7 +211,7 @@ def run_all(meta_path):
 
     # gdb_path = download_data(run_dict)
     gdb_path = '/netfiles/ciroh/floodplainsData/runs/7/network/NHD/NHDPLUS_H_0430_HU4_GDB.gdb'
-    merge_reaches(gdb_path, run_dict)
+    merge_reaches(gdb_path, run_dict, merge_short=True)
     # clip_to_study_area(gdb_path, run_dict)
 
     print('Cleaning up')
