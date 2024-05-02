@@ -71,7 +71,7 @@ def merge_reaches(gdb_path, run_dict):
     conn.commit()
 
 
-def clip_to_study_area(gdb_path, run_dict):
+def clip_to_study_area(gdb_path, run_dict, water_toggle=0.05):
     # Clip flowlines and subcatchments to catchments of interest
     print('Loading Merged VAA table')
     conn = sqlite3.connect(run_dict['network_db_path'])
@@ -98,8 +98,21 @@ def clip_to_study_area(gdb_path, run_dict):
     intersected = intersected.drop(['Code_name'], axis=1)
     intersected = intersected.merge(max_length_subgroup[[run_dict["id_field"], 'Code_name']], on=run_dict["id_field"], how='left')
     intersected = intersected.merge(subbasins[[c for c in subbasins.columns if c not in ['geometry', 'AreaSqKm']]], on='Code_name', how='left')
-    intersected = intersected.drop(['length'], axis=1)
+    
 
+    print('Checking waterbody intersections')
+    wbodies = gpd.read_file(gdb_path, driver='OpenFileGDB', layer='NHDWaterbody')
+    wbodies = wbodies[wbodies['AreaSqKm'] > 0.05]
+    wbody_intersect = gpd.overlay(intersected, wbodies[['geometry', 'NHDPlusID']], how='intersection')
+    wbody_intersect['w_length'] = wbody_intersect.length
+    intersected['length'] = intersected.length
+    wbody_intersect = wbody_intersect.groupby([run_dict["id_field"]])['w_length'].sum().reset_index()
+    old_sums = intersected.groupby([run_dict["id_field"]])['length'].sum().reset_index()
+    wbody_intersect = wbody_intersect.merge(old_sums, on=run_dict["id_field"], how='left')
+    wbody_intersect['pct_water'] = wbody_intersect['w_length'] / wbody_intersect['length']
+    wbody_intersect['wbody'] = wbody_intersect['pct_water'] > water_toggle
+    intersected = intersected.merge(wbody_intersect[[run_dict["id_field"], 'wbody']], on=run_dict["id_field"], how='left')
+    
     print('Saving to file')
     intersected.to_file(run_dict['flowline_path'])
     intersected = intersected.drop(['geometry'], axis=1)
@@ -127,9 +140,10 @@ def run_all(meta_path):
     with open(meta_path, 'r') as f:
         run_dict = json.loads(f.read())
 
-    gdb_path = download_data(run_dict)
+    # gdb_path = download_data(run_dict)
+    gdb_path = '/netfiles/ciroh/floodplainsData/runs/7/network/NHD/NHDPLUS_H_0430_HU4_GDB.gdb'
     merge_reaches(gdb_path, run_dict)
-    clip_to_study_area(gdb_path, run_dict)
+    # clip_to_study_area(gdb_path, run_dict)
 
     print('Cleaning up')
     shutil.rmtree(os.path.join(run_dict['network_directory'], 'NHD'))
@@ -137,5 +151,5 @@ def run_all(meta_path):
 
 
 if __name__ == '__main__':
-    meta_path = r'/netfiles/ciroh/floodplainsData/runs/6/run_metadata.json'
+    meta_path = r'/netfiles/ciroh/floodplainsData/runs/7/run_metadata.json'
     run_all(meta_path)
