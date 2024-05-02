@@ -74,7 +74,7 @@ def merge_reaches(gdb_path, run_dict, merge_short=False):
     c.execute('INSERT INTO reach_data (ReachCode, TotDASqKm, min_el, max_el, length, s_order) SELECT uvm.reachcode, max(nhd.totdasqkm), min(nhd.minelevsmo), max(nhd.maxelevsmo), sum(nhd.slopelenkm)*1000, max(nhd.streamorde) FROM nhdplusflowlinevaa nhd JOIN merged uvm ON uvm.nhdplusid = nhd.nhdplusid WHERE nhd.mainstem=1 GROUP BY uvm.reachcode')
     conn.commit()
 
-def merge_short_reaches(conn, c, length_threshold=300):
+def merge_short_reaches(conn, c, length_threshold=500):
     # Traverse the network in a postorder fashion to identify reaches with length less than 300 meters and merges them with the downstream reach
     mainstems = pd.read_sql_query("SELECT fromnode, tonode, reachcode, slopelenkm from nhdplusflowlinevaa where mainstem = 1", conn)
     mainstems['fromnode'] = mainstems['fromnode'].astype(int).astype(str)
@@ -88,21 +88,22 @@ def merge_short_reaches(conn, c, length_threshold=300):
     edge_dict = defaultdict(list)
     meta_dict = dict()
     reachcodes = mainstems['reachcode'].unique()
+    all_nodes = mainstems['fromnode'].unique()
+    q = list()
     for r in reachcodes:
         tmp = mainstems[mainstems['reachcode'] == r]
         froms = set(tmp['fromnode'])
         tos = set(tmp['tonode'])
         us = froms.difference(tos).pop()
         ds = tos.difference(froms).pop()
-        tmp_length = tmp['length'].sum()
-        edge_dict[ds].append(us)
-        meta_dict[us] = {'l': tmp_length, 'reachcode': r, 'ds': ds}
-
-    # Find root nodes
-    all_nodes = list()
-    [all_nodes.extend(v) for v in edge_dict.values()]
-    root_nodes = set(edge_dict.keys()).difference(set(all_nodes))
-    q = list(root_nodes)
+        if ds not in all_nodes:
+            q.append(r)
+            meta_dict[r] = {'l': tmp_length}
+        else:
+            ds = mainstems[mainstems['fromnode'] == ds]['reachcode'].values[0]
+            tmp_length = tmp['length'].sum()
+            edge_dict[ds].append(r)
+            meta_dict[r] = {'l': tmp_length, 'ds': ds}
 
     # Traverse the network in postorder
     conversions = dict()
@@ -114,21 +115,20 @@ def merge_short_reaches(conn, c, length_threshold=300):
         children = edge_dict[cur_node]
         if all([n in visited for n in children]) or all([n not in edge_dict for n in children]):
             tmp_l = meta_dict[cur_node]['l']
-            tmp_r = meta_dict[cur_node]['reachcode']
             # Check for reaches in the stack
             if len(merge_ids) == 0:
                 if tmp_l < length_threshold:
                     merge_length += tmp_l
-                    merge_ids.append(tmp_r)
+                    merge_ids.append(cur_node)
             else:
                 # Check if the reach is short or a confluence
                 if tmp_l + merge_length >= length_threshold or len(children) > 1:
-                    conversions[tmp_r] = merge_ids
+                    conversions[cur_node] = merge_ids
                     merge_length = 0
                     merge_ids = list()
                 else:
                     merge_length += tmp_l
-                    merge_ids.append(tmp_r)        
+                    merge_ids.append(cur_node)        
             q.pop()
             visited.add(cur_node)
             continue
@@ -209,10 +209,9 @@ def run_all(meta_path):
     with open(meta_path, 'r') as f:
         run_dict = json.loads(f.read())
 
-    # gdb_path = download_data(run_dict)
-    gdb_path = '/netfiles/ciroh/floodplainsData/runs/7/network/NHD/NHDPLUS_H_0430_HU4_GDB.gdb'
+    gdb_path = download_data(run_dict)
     merge_reaches(gdb_path, run_dict, merge_short=True)
-    # clip_to_study_area(gdb_path, run_dict)
+    clip_to_study_area(gdb_path, run_dict)
 
     print('Cleaning up')
     shutil.rmtree(os.path.join(run_dict['network_directory'], 'NHD'))
