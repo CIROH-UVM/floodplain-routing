@@ -168,7 +168,6 @@ def clip_to_study_area(gdb_path, run_dict, water_toggle=0.05):
     intersected = intersected.merge(max_length_subgroup[[run_dict["id_field"], 'Code_name']], on=run_dict["id_field"], how='left')
     intersected = intersected.merge(subbasins[[c for c in subbasins.columns if c not in ['geometry', 'AreaSqKm']]], on='Code_name', how='left')
     
-
     print('Checking waterbody intersections')
     wbodies = gpd.read_file(gdb_path, driver='OpenFileGDB', layer='NHDWaterbody')
     wbodies = wbodies[wbodies['AreaSqKm'] > 0.05]
@@ -202,6 +201,7 @@ def clip_to_study_area(gdb_path, run_dict, water_toggle=0.05):
     meta = meta.merge(subunits, how='left', left_on='ReachCode', right_on=run_dict["id_field"])
     meta[['8_code', run_dict['subunit_field']]] = meta['Code_name'].str.split('_', expand=True)
     meta[run_dict['unit_field']] = meta['8_code'].map(NAME_DICT)
+    meta = meta.merge(wbody_intersect[[run_dict["id_field"], 'wbody']], left_on='ReachCode', right_on=run_dict["id_field"], how='left')
     meta.to_csv(run_dict['reach_meta_path'], index=False)
 
 def run_all(meta_path):
@@ -209,13 +209,14 @@ def run_all(meta_path):
     with open(meta_path, 'r') as f:
         run_dict = json.loads(f.read())
 
-    gdb_path = download_data(run_dict)
-    merge_reaches(gdb_path, run_dict, merge_short=True)
+    # gdb_path = download_data(run_dict)
+    gdb_path = r'/netfiles/ciroh/floodplainsData/runs/7/network/NHD/NHDPLUS_H_0430_HU4_GDB.gdb'
+    # merge_reaches(gdb_path, run_dict, merge_short=True)
     clip_to_study_area(gdb_path, run_dict)
 
     print('Cleaning up')
-    shutil.rmtree(os.path.join(run_dict['network_directory'], 'NHD'))
-    os.remove(os.path.join(run_dict['network_directory'], 'NHD.zip'))
+    # shutil.rmtree(os.path.join(run_dict['network_directory'], 'NHD'))
+    # os.remove(os.path.join(run_dict['network_directory'], 'NHD.zip'))
 
 
 if __name__ == '__main__':
