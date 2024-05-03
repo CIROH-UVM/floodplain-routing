@@ -17,7 +17,7 @@ import matplotlib.pyplot as plt
 from matplotlib.colors import ListedColormap
 import seaborn as sns
 import itertools as it
-
+import copy
 
 
 class Clusterer:
@@ -38,10 +38,10 @@ class Clusterer:
         celerity_path = os.path.join(working_dir, 'celerity.csv')
 
         feature_data = pd.read_csv(features_path)
-        feature_data = feature_data.dropna(axis=0)
-        # feature_data = feature_data[feature_data['invalid_geometry'] == 0].copy()
-        feature_data['ReachCode'] = feature_data['ReachCode'].astype(np.int64).astype(str)
-        self.feature_data = feature_data.set_index('ReachCode')
+        # feature_data = feature_data.dropna(axis=0)
+        feature_data = feature_data[feature_data['invalid_geometry'] == 0].copy()
+        feature_data[run_dict['id_field']] = feature_data[run_dict['id_field']].astype(np.int64).astype(str)
+        self.feature_data = feature_data.set_index(run_dict['id_field'])
 
         el_data = pd.read_csv(el_path)
         self.el_data = el_data.dropna(axis=1)
@@ -78,18 +78,19 @@ class Clusterer:
         self.rh_prime_data = rh_prime_data.dropna(axis=1)
 
         # Add attenuation
-        magnitudes = ['Q2', 'Q10', 'Q50', 'Q100']
-        durations = ['Short', 'Medium', 'Long']
+        if os.path.exists(run_dict['muskingum_path']):
+            magnitudes = ['Q2', 'Q10', 'Q50', 'Q100']
+            durations = ['Short', 'Medium', 'Long']
 
-        with open(r'source/regressions.json', 'r') as f:
-            regressions = json.loads(f.read())
-        regressions = regressions['peak_flowrate']
-        for m in magnitudes:
-            peak_estimate = ((self.feature_data['DASqKm'].to_numpy() / 2.59) ** regressions[m][1]) * regressions[m][0] * (1 / 35.3147)
-            for d in durations:
-                self.feature_data[f'{m}_{d}_cms_attenuation'] = self.feature_data[f'{m}_{d}_pct_attenuation'] * peak_estimate
-                total_lengths = (self.feature_data[f'{m}_{d}_dx'] * self.feature_data[f'{m}_{d}_subreaches']) / 1000
-                self.feature_data[f'{m}_{d}_cms_attenuation_per_km'] = self.feature_data[f'{m}_{d}_cms_attenuation'] / total_lengths
+            with open(r'source/regressions.json', 'r') as f:
+                regressions = json.loads(f.read())
+            regressions = regressions['peak_flowrate']
+            for m in magnitudes:
+                peak_estimate = ((self.feature_data['DASqKm'].to_numpy() / 2.59) ** regressions[m][1]) * regressions[m][0] * (1 / 35.3147)
+                for d in durations:
+                    self.feature_data[f'{m}_{d}_cms_attenuation'] = self.feature_data[f'{m}_{d}_pct_attenuation'] * peak_estimate
+                    total_lengths = (self.feature_data[f'{m}_{d}_dx'] * self.feature_data[f'{m}_{d}_subreaches']) / 1000
+                    self.feature_data[f'{m}_{d}_cms_attenuation_per_km'] = self.feature_data[f'{m}_{d}_cms_attenuation'] / total_lengths
 
         self.clusterer = None
         self.embedding = None
@@ -124,6 +125,11 @@ class Clusterer:
         l1 = len(self.feature_data)
         self.feature_data = self.feature_data.query(f'slope < {slope_cutoff}').copy()
         print(f'Removed {l1 - len(self.feature_data)} reaches for slope')
+    
+    def wbody_removal(self):
+        l1 = len(self.feature_data)
+        self.feature_data = self.feature_data.query('wbody != 1').copy()
+        print(f'Removed {l1 - len(self.feature_data)} reaches for wbody')
 
     def preprocess_features(self, feature_cols, norm_type='min-max'):
         self.feature_cols = feature_cols
@@ -136,7 +142,7 @@ class Clusterer:
         skewed_features = abs(skew) > 1.5
         for i, s in enumerate(skewed_features):
             if s:
-                X[:, i][X[:, i] == 0] = X[:, i][X[:, i] != 0].min()
+                X[:, i][X[:, i] <= 0] = X[:, i][X[:, i] > 0].min()
         X[:, skewed_features] = np.log(X[:, skewed_features])
 
         # normalize
@@ -182,6 +188,17 @@ class Clusterer:
     def cluster(self):
         labels = self.clusterer.fit_predict(self.X)
         self.feature_data.loc[:, 'cluster'] = labels
+
+        # find median item of each cluster
+        medoid_dict = dict()
+        for c in np.unique(labels):
+            subset = self.X[labels == c]
+            dists = pairwise_distances(subset, subset)
+            medoid = np.argmin(dists.sum(axis=0))
+            subset = self.feature_data.index[labels == c]
+            medoid = subset[medoid]
+            medoid_dict[c] = medoid
+        self.medoid_dict = medoid_dict
 
     def calc_embedding(self, method='umap', sigma=2, lr=6, epochs=5000):
         print('Calculating Embeddings')
@@ -304,7 +321,7 @@ class Clusterer:
         fig.savefig(os.path.join(self.out_dir, 'elbow_plot.png'), dpi=300)
         self.clusterer.n_clusters = og_bins
 
-    def vis_celerity(self, detrended=False):
+    def vis_celerity(self, detrended=False, plot_name='celerity_map.png'):
         if self.embedding is None:
             self.calc_embedding()
         if detrended:
@@ -320,14 +337,15 @@ class Clusterer:
             cbar.set_label('Celerity')
         ax.set_xticks([])
         ax.set_yticks([])
-        fig.savefig(os.path.join(self.out_dir, 'celerity_map.png'), dpi=300)
+        fig.savefig(os.path.join(self.out_dir, plot_name), dpi=300)
     
     def vis_clusters(self):
         if self.embedding is None:
             self.calc_embedding()
         fig, ax = plt.subplots()
         color_list = ['#fdc161','#c1bae0','#badeab', '#03bde3', '#fbabb7', '#fbf493']
-        cmap = ListedColormap(color_list[:len(self.feature_data['cluster'].unique())])
+        color_list = ['#FF5733', '#FFC300', '#219c21', '#3366FF', '#FF33EA', '#15e8d2', '#FF3366', '#CC33FF', '#33CCFF']
+        cmap = ListedColormap(color_list[:int(self.feature_data['cluster'].max() + 1)])
         cbar = ax.scatter(self.embedding[:, 0], self.embedding[:, 1], c=self.feature_data['cluster'].to_numpy(), alpha=0.7, s=3, cmap=cmap)
         cbar = fig.colorbar(cbar)
         cbar.set_ticks(range(len(self.feature_data['cluster'].unique())))
@@ -546,11 +564,15 @@ class Clusterer:
         cols = int(np.ceil(np.sqrt(len(self.feature_cols))))
         rows = int(len(self.feature_cols) / cols) + 1
         cols = 3
-        rows = 3
-
+        rows = np.ceil(len(self.feature_cols) / cols).astype(int)
+        
         fig, axs = plt.subplots(ncols=cols, nrows=rows, figsize=(13, 9), sharey=True, sharex=True)
-        axs[2, 0].remove()
-        axs[2, 2].remove()
+        if len(self.feature_cols) % cols == 1:
+            axs[-1, 0].remove()
+            axs[-1, 2].remove()
+        elif len(self.feature_cols) % cols == 2:
+            axs[-1, 2].remove()
+
         ax_list = [ax for ax in axs.flat if ax.axes is not None]
         for i, ax in enumerate(ax_list):
             c = self.feature_cols[i]
@@ -869,6 +891,7 @@ def paper():
     features = renames
 
     trans_dict = clusterer.preprocess_features(features)
+    print(clusterer.X.min(axis=0))
     medoid_dict = {0: None}
 
     # Cluster
@@ -884,11 +907,11 @@ def paper():
     for i, c in enumerate(clusterer.clusterer.medoid_indices_):
         i_adj = i + existing_clusters
         medoid_dict[i_adj] = clusterer.feature_data.index.to_list()[c]
-    clusterer.plot_simple_hydraulics(medoid_dict)
     
-    junk_drawer = 2
+    junk_drawer = 5
     junk_reaches = clusterer.feature_data[clusterer.feature_data['cluster'] == junk_drawer].index
     sub_clusterer = sub_cluster(run_path, trans_dict, junk_reaches, rename_dict, n_clusters=2)
+    print(sub_clusterer.X.min(axis=0))
     # sub_clusterer.elbow_plot()
     existing_clusters = np.nanmax(plotter.feature_data['cluster'].unique()) + 1
     sub_clusterer.feature_data['cluster'] = sub_clusterer.feature_data['cluster'] + existing_clusters
@@ -902,13 +925,14 @@ def paper():
 
     plotter.feature_data = plotter.feature_data[~plotter.feature_data['cluster'].isna()]
     plotter.preprocess_features_fromdict(trans_dict)
+    print(plotter.X.min(axis=0))
     plotter.X[plotter.feature_data['cluster'] == 0] = np.nan
     naming_dict = {0: 'X',
                    1: 'D',
-                   2: 'NA',
-                   3: 'B',
-                   4: 'C',
-                   5: 'A',
+                   2: 'A',
+                   3: 'C',
+                   4: 'B',
+                   5: 'NA',
                    6: 'E1',
                    7: 'E2'}
     plotter.feature_data['cluster'] = plotter.feature_data['cluster'].map(lambda x: naming_dict[int(x)])
@@ -949,7 +973,7 @@ def main5():
     clusterer.feature_data.loc[clusterer.feature_data['w_edep'] > 5000, 'w_edep'] = 5000
     
     # Remove confined settings and high slopes
-    non_attenuators = clusterer.feature_data[np.logical_or(clusterer.feature_data['slope'] > 10 ** -3, clusterer.feature_data['valley_confinement'] < 1.5)].index
+    non_attenuators = clusterer.feature_data[np.logical_or(clusterer.feature_data['slope'] > 10 ** -2, clusterer.feature_data['valley_confinement'] < 1.5)].index
     plotter.feature_data.loc[non_attenuators, 'cluster'] = 0
     clusterer.slope_removal(10 ** -2)
     clusterer.vc_removal(1.5)
@@ -984,7 +1008,6 @@ def main5():
         i_adj = i + existing_clusters
         medoid_dict[i_adj] = clusterer.feature_data.index.to_list()[c]
 
-
     plotter.feature_data = plotter.feature_data[~plotter.feature_data['cluster'].isna()]
     plotter.preprocess_features_fromdict(trans_dict)
     plotter.X[plotter.feature_data['cluster'] == 0] = np.nan
@@ -1001,6 +1024,7 @@ def main5():
 
     plotter.cpal['E'] = '#fa66ee'
     plotter.cpal['F'] = '#fbabb7'
+    kristen_plot(plotter.feature_data['Drainage Area (sqkm)'].to_numpy(), plotter.feature_data['cluster'].to_numpy(), plotter.cpal, plotter.out_dir)
     plotter.plot_simple_hydraulics(medoid_dict)
     plotter.plot_feature_boxplots()
     plotter.plot_boxplots_general(['Drainage Area (sqkm)', 'Valley Confinement (Regression)', 'Stream Order'])
@@ -1019,6 +1043,352 @@ def main5():
     # result = model.fit()
     # print(result.summary())
 
+def kristen_plot(da, clusters, cpal, out_dir):
+    anr_y = (0.96 * ((da / 2.59) ** 0.30)) / 3.28
+    bieger_y = (0.26 * (da ** 0.287))
+    c_list = [cpal[c] for c in clusters]
+    pd_version = pd.DataFrame({'bf': bieger_y, 'cluster': clusters})
+    pd_version = pd.melt(pd_version, id_vars='cluster', value_vars='bf', var_name='Cluster', value_name='Bieger Bankfull Depth (m)')
+    fig, ax = plt.subplots(figsize=(6, 6), nrows=2, gridspec_kw={'height_ratios': [1, 2.5]}, sharex=True)
+    sns.kdeplot(pd_version, x='Bieger Bankfull Depth (m)', hue='cluster', palette=cpal, ax=ax[0], clip=(0, bieger_y.max()), fill=True)
+    ax[1].scatter(bieger_y, anr_y, c=c_list, s=3, alpha=0.7)
+    max_pt = max(bieger_y.max(), anr_y.max())
+    ax[1].plot([0, max_pt], [0, max_pt], color='k', linestyle='--', alpha=0.7)
+    ax[1].set(xlabel='Bieger Bankfull Depth (m)', ylabel='VT ANR Bankfull Depth (m)')
+    fig.savefig(os.path.join(out_dir, 'bankfull_comparison.png'), dpi=300)
+
+
+def main6():
+    run_path = r'/netfiles/ciroh/floodplainsData/runs/6/run_metadata.json'
+    clusterer = Clusterer(run_path)
+    clusterer.feature_data['cluster'] = np.nan
+    clusterer.out_dir = os.path.join(clusterer.run_dict['analysis_directory'], 'clusters_2')
+
+    # Clean data and add floodplain slope feature
+    split_1 = clusterer.feature_data[(clusterer.feature_data['valley_confinement'] < 1.5) | (clusterer.feature_data['slope'] > 3 * (10 ** -3))].copy()
+    split_1['cluster'] = -1
+    clusterer.feature_data.loc[clusterer.feature_data['w_edep'] > 5000, 'w_edep'] = 5000
+    clusterer.slope_removal(3 * (10 ** -3))
+    clusterer.vc_removal(1.5)
+    features = ['el_edap_scaled', 'height_scaled', 'w_edep', 'valley_confinement', 'vol', 'min_rhp', 'slope']
+    trans_dict = clusterer.preprocess_features(features)
+    print(f'n={clusterer.X.shape[0]}')
+
+    # EDA
+    # fig, ax = multi_elbow(clusterer.X)
+    # fig.savefig(os.path.join(clusterer.out_dir, 'multi_elbow_plot.png'), dpi=300)
+    # pca = PCA(n_components=len(features))
+    # pca.fit(clusterer.X)
+    # fig, ax = plt.subplots()
+    # ax.bar(range(1, len(features) + 1), pca.explained_variance_ratio_)
+    # ax2 = ax.twinx()
+    # ax2.plot(range(1, len(features) + 1), np.cumsum(pca.explained_variance_ratio_), color='r')
+    # ax.set(ylim=(0, 1.1), yticks=[0, 0.2, 0.4, 0.6, 0.8, 1], xlabel='Principal Component', ylabel='Explained Variance Ratio')
+    # ax2.set(ylim=(0, 1.1), yticks=[0, 0.2, 0.4, 0.6, 0.8, 1], xlabel='Principal Component', ylabel='Cumulative Explained Variance Ratio')
+    # fig.savefig(os.path.join(clusterer.out_dir, 'pca_plot.png'), dpi=300)
+
+    # Dimensionality reduction check
+    clusterer.calc_embedding(method='pca')
+    # clusterer.vis_celerity(detrended=True, plot_name='pca_celerity_map.png')
+
+    # Cluster
+    clusterer.clusterer = KMedoids(n_clusters=4, random_state=0)
+    clusterer.cluster()
+    medoid_dict = {-1: None}
+    for i, c in enumerate(clusterer.clusterer.medoid_indices_):
+        medoid_dict[i] = clusterer.feature_data.index.to_list()[c]
+    
+    # Sub-cluster
+    sub_clusterer = Clusterer(run_path)
+    junk_drawer = 1
+    junk_reaches = (clusterer.feature_data['cluster'] == junk_drawer)
+    sub_clusterer.X = clusterer.X[junk_reaches]
+    junk_reaches = clusterer.feature_data[junk_reaches].index
+    sub_clusterer.feature_data = clusterer.feature_data.loc[junk_reaches]
+
+    # Chack cluster count for sub-reaches
+    # fig, ax = multi_elbow(sub_clusterer.X)
+    # fig.savefig(os.path.join(clusterer.out_dir, 'sub_multi_elbow_plot.png'), dpi=300)
+    
+    # sub cluster
+    sub_clusterer.clusterer = KMedoids(n_clusters=3, random_state=0)
+    sub_clusterer.cluster()
+    c_offset = clusterer.feature_data['cluster'].max() + 1
+    clusterer.feature_data.loc[junk_reaches, 'cluster'] = sub_clusterer.feature_data.loc[junk_reaches, 'cluster'] + c_offset
+    del medoid_dict[junk_drawer]
+    for i, c in enumerate(sub_clusterer.clusterer.medoid_indices_):
+        medoid_dict[i + c_offset] = sub_clusterer.feature_data.index.to_list()[c]
+
+    # clusterer.vis_clusters()
+
+    # Merge data back
+    clusterer.feature_data = pd.concat([clusterer.feature_data, split_1])
+    clusterer.X = np.append(clusterer.X, np.ones((split_1.shape[0], clusterer.X.shape[1])) * np.nan, axis=0)
+    naming_dict = {-1: 'X',
+                   4: 'A1',
+                   6: 'A2',
+                   5: 'A3',
+                   2: 'B',
+                   0: 'C',
+                   3: 'D'}
+    clusterer.cpal = {i: c for i, c in zip(sorted(naming_dict.values()), ['#FF5733', '#FFC300', '#219c21', '#3366FF', '#FF33EA', '#15e8d2', '#FF3366'])}
+    clusterer.feature_data['cluster'] = clusterer.feature_data['cluster'].map(lambda x: naming_dict[int(x)])
+    medoid_dict = {naming_dict[int(k)]: v for k, v in medoid_dict.items()}
+
+    # vis hydraulics
+    # clusterer.plot_simple_hydraulics(medoid_dict)
+
+    features = ['el_edap_scaled', 'height_scaled', 'w_edep', 'valley_confinement', 'vol', 'min_rhp', 'slope']
+    renames = ['EDAP', 'Height', 'Valley Width', 'Valley Confinement', 'Size', 'Abruptness', 'Slope']
+    rename_dict = {k: v for k, v in zip(features, renames)}
+    rename_dict['DASqKm'] = 'Drainage Area (sqkm)'
+    rename_dict['regression_valley_confinement'] = 'Valley Confinement (Regression)'
+    rename_dict['streamorder'] = 'Stream Order'
+    rename_dict['celerity_detrended'] = 'Shape Celerity (m^(2/3))'
+    rename_dict['celerity'] = 'Celerity (m/s)'
+    clusterer.feature_data = clusterer.feature_data.rename(columns=rename_dict)
+    # clusterer.plot_feature_boxplots()
+    clusterer.plot_boxplots_general(['Drainage Area (sqkm)', 'Valley Confinement (Regression)', 'Stream Order'])
+    # clusterer.plot_routing()
+
+    clusterer.feature_data[['cluster']].to_csv(os.path.join(clusterer.out_dir, 'clustered_data.csv'))
+
+
+def ml_ai_eda():
+    run_path = r'/netfiles/ciroh/floodplainsData/runs/6/run_metadata.json'
+    clusterer = Clusterer(run_path)
+    clusterer.feature_data['cluster'] = np.nan
+    clusterer.out_dir = os.path.join(clusterer.run_dict['analysis_directory'], 'ml_ai_meeting')
+
+    # Clean data and add floodplain slope feature
+    clusterer.feature_data.loc[clusterer.feature_data['w_edep'] > 5000, 'w_edep'] = 5000
+    clusterer.slope_removal(3 * (10 ** -3))
+    clusterer.vc_removal(1.5)
+    features = ['el_edap_scaled', 'height_scaled', 'w_edep', 'valley_confinement', 'vol', 'min_rhp', 'slope']
+    trans_dict = clusterer.preprocess_features(features)
+    print(f'n={clusterer.X.shape[0]}')
+
+    # EDA
+    # fig, ax = multi_elbow(clusterer.X)
+    # fig.savefig(os.path.join(clusterer.out_dir, 'multi_elbow_plot.png'), dpi=300)
+    # pca = PCA(n_components=len(features))
+    # pca.fit(clusterer.X)
+    # fig, ax = plt.subplots()
+    # ax.bar(range(1, len(features) + 1), pca.explained_variance_ratio_)
+    # ax2 = ax.twinx()
+    # ax2.plot(range(1, len(features) + 1), np.cumsum(pca.explained_variance_ratio_), color='r')
+    # ax.set(ylim=(0, 1.1), yticks=[0, 0.2, 0.4, 0.6, 0.8, 1], xlabel='Principal Component', ylabel='Explained Variance Ratio')
+    # ax2.set(ylim=(0, 1.1), yticks=[0, 0.2, 0.4, 0.6, 0.8, 1], xlabel='Principal Component', ylabel='Cumulative Explained Variance Ratio')
+    # fig.savefig(os.path.join(clusterer.out_dir, 'pca_plot.png'), dpi=300)
+
+    # Dimensionality reduction
+    clusterer.calc_embedding(method='pca')
+    # clusterer.vis_celerity(detrended=True, plot_name='pca_celerity_map.png')
+    # clusterer.calc_embedding(method='som')
+    # clusterer.vis_celerity(detrended=True, plot_name='som_celerity_map.png')
+    # clusterer.calc_embedding(method='umap')
+    # clusterer.vis_celerity(detrended=True, plot_name='umap_celerity_map.png')
+    # clusterer.calc_embedding(method='tsne')
+    # clusterer.vis_celerity(detrended=True, plot_name='tsne_celerity_map.png')
+
+    # Cluster
+    clusterer.clusterer = KMedoids(n_clusters=4, random_state=0)
+    clusterer.cluster()
+    medoid_dict = {0: None}
+    for i, c in enumerate(clusterer.clusterer.medoid_indices_):
+        medoid_dict[i] = clusterer.feature_data.index.to_list()[c]
+    clusterer.vis_clusters()
+
+    # vis hydraulics
+    clusterer.cpal = {i: c for i, c in enumerate(['#FF5733', '#FFC300', '#219c21', '#3366FF', '#FF33EA', '#15e8d2', '#FF3366', '#CC33FF', '#33CCFF'])}
+    clusterer.plot_simple_hydraulics(medoid_dict)
+
+    features = ['el_edap_scaled', 'height_scaled', 'w_edep', 'valley_confinement', 'vol', 'min_rhp', 'slope']
+    renames = ['EDAP', 'Height', 'Valley Width', 'Valley Confinement', 'Size', 'Abruptness', 'Slope']
+    rename_dict = {k: v for k, v in zip(features, renames)}
+    rename_dict['DASqKm'] = 'Drainage Area (sqkm)'
+    rename_dict['regression_valley_confinement'] = 'Valley Confinement (Regression)'
+    rename_dict['streamorder'] = 'Stream Order'
+    rename_dict['celerity_detrended'] = 'Shape Celerity (m^(2/3))'
+    rename_dict['celerity'] = 'Celerity (m/s)'
+    clusterer.feature_data = clusterer.feature_data.rename(columns=rename_dict)
+    clusterer.plot_feature_boxplots()
+    clusterer.plot_boxplots_general(['Drainage Area (sqkm)', 'Valley Confinement (Regression)', 'Stream Order'])
+    clusterer.plot_routing()
+
+def multi_elbow(data):
+    ch_scores = {'kmeans': list(), 'spectral': list(), 'agglomerative': list(), 'kmedoids': list(), 'gmm': list()}
+    sil_scores = {'kmeans': list(), 'spectral': list(), 'agglomerative': list(), 'kmedoids': list(), 'gmm': list()}
+    cluster_counts = list(range(2, 20))
+    for i in cluster_counts:
+        kmeans = KMeans(n_clusters=i, n_init='auto', random_state=0)
+        kmeans.fit(data)
+        ch_scores['kmeans'].append(calinski_harabasz_score(data, kmeans.labels_))
+        sil_scores['kmeans'].append(silhouette_score(data, kmeans.labels_))
+
+        spectral = SpectralClustering(n_clusters=i, random_state=0)
+        spectral.fit(data)
+        ch_scores['spectral'].append(calinski_harabasz_score(data, spectral.labels_))
+        sil_scores['spectral'].append(silhouette_score(data, spectral.labels_))
+
+        agglomerative = AgglomerativeClustering(n_clusters=i)
+        agglomerative.fit(data)
+        ch_scores['agglomerative'].append(calinski_harabasz_score(data, agglomerative.labels_))
+        sil_scores['agglomerative'].append(silhouette_score(data, agglomerative.labels_))
+
+        kmedoids = KMedoids(n_clusters=i, random_state=0)
+        kmedoids.fit(data)
+        ch_scores['kmedoids'].append(calinski_harabasz_score(data, kmedoids.labels_))
+        sil_scores['kmedoids'].append(silhouette_score(data, kmedoids.labels_))
+
+        gmm = GaussianMixture(n_components=i, random_state=0)
+        gmm.fit(data)
+        ch_scores['gmm'].append(calinski_harabasz_score(data, gmm.predict(data)))
+        sil_scores['gmm'].append(silhouette_score(data, gmm.predict(data)))
+
+    fig, ax = plt.subplots(nrows=2)
+    for i in ch_scores:
+        ax[0].plot(cluster_counts, ch_scores[i], label=i, alpha=0.5)
+        ax[1].plot(cluster_counts, sil_scores[i], alpha=0.5)
+
+    ax[1].set_xlabel('Number of Clusters')
+    ax[0].set_ylabel('Calinski Harabasz Score')
+    ax[1].set_ylabel('Silhouette Score')
+    for i in cluster_counts:
+        ax[0].axvline(i, color='k', linewidth=0.3, alpha=0.2)
+        ax[1].axvline(i, color='k', linewidth=0.3, alpha=0.2)
+    ax[0].set_xticks(cluster_counts)
+    ax[1].set_xticks(cluster_counts)
+    # add legend on figure margin above both figures
+    ax[0].legend(loc='center right', fontsize=9)
+    fig.tight_layout()
+    return fig, ax
+
+def hydrofabric():
+    run_path = r'/netfiles/ciroh/floodplainsData/runs/6/run_metadata.json'
+    clusterer = Clusterer(run_path)
+    clusterer.feature_data['cluster'] = np.nan
+    clusterer.out_dir = os.path.join(clusterer.run_dict['analysis_directory'], 'comparison_5_1')
+    os.makedirs(clusterer.out_dir, exist_ok=True)
+
+    # Clean data and add floodplain slope feature
+    clusterer.feature_data.loc[clusterer.feature_data['w_edep'] > 5000, 'w_edep'] = 5000
+    clusterer.slope_removal(3 * (10 ** -3))
+    clusterer.vc_removal(1.5)
+    features = ['el_edap_scaled', 'height_scaled', 'w_edep', 'valley_confinement', 'vol', 'min_rhp', 'slope']
+    trans_dict = clusterer.preprocess_features(features)
+    print(f'n={clusterer.X.shape[0]}')
+
+    # # EDA
+    # fig, ax = multi_elbow(clusterer.X)
+    # fig.savefig(os.path.join(clusterer.out_dir, 'multi_elbow_plot.png'), dpi=300)
+    # pca = PCA(n_components=len(features))
+    # pca.fit(clusterer.X)
+    # fig, ax = plt.subplots()
+    # ax.bar(range(1, len(features) + 1), pca.explained_variance_ratio_)
+    # ax2 = ax.twinx()
+    # ax2.plot(range(1, len(features) + 1), np.cumsum(pca.explained_variance_ratio_), color='r')
+    # ax.set(ylim=(0, 1.1), yticks=[0, 0.2, 0.4, 0.6, 0.8, 1], xlabel='Principal Component', ylabel='Explained Variance Ratio')
+    # ax2.set(ylim=(0, 1.1), yticks=[0, 0.2, 0.4, 0.6, 0.8, 1], xlabel='Principal Component', ylabel='Cumulative Explained Variance Ratio')
+    # fig.savefig(os.path.join(clusterer.out_dir, 'pca_plot.png'), dpi=300)
+
+    # Dimensionality reduction
+    clusterer.calc_embedding(method='pca')
+    # clusterer.vis_celerity(detrended=True, plot_name='pca_celerity_map.png')
+    # clusterer.calc_embedding(method='som')
+    # clusterer.vis_celerity(detrended=True, plot_name='som_celerity_map.png')
+    # clusterer.calc_embedding(method='umap')
+    # clusterer.vis_celerity(detrended=True, plot_name='umap_celerity_map.png')
+    # clusterer.calc_embedding(method='tsne')
+    # clusterer.vis_celerity(detrended=True, plot_name='tsne_celerity_map.png')
+
+    # Cluster
+    clusterer.clusterer = KMedoids(n_clusters=5, random_state=0)
+    clusterer.cluster()
+    medoid_dict = {0: None}
+    for i, c in enumerate(clusterer.clusterer.medoid_indices_):
+        medoid_dict[i] = clusterer.feature_data.index.to_list()[c]
+    clusterer.vis_clusters()
+
+    # vis hydraulics
+    clusterer.cpal = {i: c for i, c in enumerate(['#FF5733', '#FFC300', '#219c21', '#3366FF', '#FF33EA', '#15e8d2', '#FF3366', '#CC33FF', '#33CCFF'])}
+    clusterer.plot_simple_hydraulics(medoid_dict)
+
+    features = ['el_edap_scaled', 'height_scaled', 'w_edep', 'valley_confinement', 'vol', 'min_rhp', 'slope']
+    renames = ['EDAP', 'Height', 'Valley Width', 'Valley Confinement', 'Size', 'Abruptness', 'Slope']
+    rename_dict = {k: v for k, v in zip(features, renames)}
+    rename_dict['DASqKm'] = 'Drainage Area (sqkm)'
+    rename_dict['regression_valley_confinement'] = 'Valley Confinement (Regression)'
+    rename_dict['streamorder'] = 'Stream Order'
+    rename_dict['celerity_detrended'] = 'Shape Celerity (m^(2/3))'
+    rename_dict['celerity'] = 'Celerity (m/s)'
+    clusterer.feature_data = clusterer.feature_data.rename(columns=rename_dict)
+    clusterer.plot_feature_boxplots()
+    clusterer.plot_boxplots_general(['Drainage Area (sqkm)', 'Valley Confinement (Regression)', 'Stream Order'])
+    # clusterer.plot_routing()
+
+def main7():
+    run_path = r'/netfiles/ciroh/floodplainsData/runs/7/run_metadata.json'
+    clusterer = Clusterer(run_path)
+    clusterer.feature_data['cluster'] = np.nan
+    os.makedirs(clusterer.out_dir, exist_ok=True)
+
+    # Clean data and add floodplain slope feature
+    clusterer.feature_data.loc[clusterer.feature_data['w_edep'] > 5000, 'w_edep'] = 5000
+    clusterer.wbody_removal()
+    clusterer.slope_removal(3 * (10 ** -3))
+    clusterer.vc_removal(1.5)
+    features = ['el_edap_scaled', 'height_scaled', 'w_edep', 'valley_confinement', 'vol', 'min_rhp', 'slope']
+    features = ['el_edap_scaled', 'el_edep_scaled', 'vol', 'min_rhp', 'min_loc_ratio', 'cumulative_volume', 'rhp_pre', 'rhp_post']
+    features = ['el_edap_scaled', 'el_edep_scaled', 'height_scaled', 'w_edep', 'w_edap', 'valley_confinement', 'min_rhp', 'vol']
+    trans_dict = clusterer.preprocess_features(features, norm_type='standard')
+    print(f'n={clusterer.X.shape[0]}')
+
+    # EDA
+    fig, ax = multi_elbow(clusterer.X)
+    fig.savefig(os.path.join(clusterer.out_dir, 'multi_elbow_plot.png'), dpi=300)
+    pca = PCA(n_components=len(features))
+    pca.fit(clusterer.X)
+    fig, ax = plt.subplots()
+    ax.bar(range(1, len(features) + 1), pca.explained_variance_ratio_)
+    ax2 = ax.twinx()
+    ax2.plot(range(1, len(features) + 1), np.cumsum(pca.explained_variance_ratio_), color='r')
+    ax.set(ylim=(0, 1.1), yticks=[0, 0.2, 0.4, 0.6, 0.8, 1], xlabel='Principal Component', ylabel='Explained Variance Ratio')
+    ax2.set(ylim=(0, 1.1), yticks=[0, 0.2, 0.4, 0.6, 0.8, 1], xlabel='Principal Component', ylabel='Cumulative Explained Variance Ratio')
+    fig.savefig(os.path.join(clusterer.out_dir, 'pca_plot.png'), dpi=300)
+
+    # Dimensionality reduction
+    clusterer.calc_embedding(method='tsne')
+
+    # Cluster
+    clusterer.clusterer = KMeans(n_clusters=4, random_state=0)
+    clusterer.cluster()
+    clusterer.vis_clusters()
+
+    # vis hydraulics
+    clusterer.cpal = {i: c for i, c in enumerate(['#FF5733', '#FFC300', '#219c21', '#3366FF', '#FF33EA', '#15e8d2', '#FF3366', '#CC33FF', '#33CCFF'])}
+    clusterer.plot_simple_hydraulics(clusterer.medoid_dict)
+
+    rename_dict = {
+        'el_edap_scaled': 'EDAP',
+        'height_scaled': 'Height',
+        'w_edep': 'Valley Width',
+        'valley_confinement': 'Valley Confinement',
+        'vol': 'Size',
+        'min_rhp': 'Abruptness',
+        'slope': 'Slope',
+        'DASqKm': 'Drainage Area (sqkm)',
+        'regression_valley_confinement': 'Valley Confinement (Regression)',
+        'streamorder': 'Stream Order',
+        'celerity_detrended': 'Shape Celerity (m^(2/3))',
+        'celerity': 'Celerity (m/s)'
+    }
+    clusterer.feature_data = clusterer.feature_data.rename(columns=rename_dict)
+    clusterer.plot_feature_boxplots()
+    clusterer.plot_boxplots_general(['Drainage Area (sqkm)', 'Valley Confinement (Regression)', 'Stream Order', 'Slope'])
+    clusterer.plot_routing()
+    clusterer.feature_data[['cluster']].to_csv(os.path.join(clusterer.out_dir, 'clustered_data.csv'))
+
 
 if __name__ == '__main__':
     # main()
@@ -1026,5 +1396,9 @@ if __name__ == '__main__':
     # main3()
     # main4()
     # main5()
-    paper()
+    # paper()
     # exploratory()
+    # ml_ai_eda()
+    # main6()
+    # hydrofabric()
+    main7()
