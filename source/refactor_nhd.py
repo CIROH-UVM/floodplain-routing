@@ -23,7 +23,6 @@ NAME_DICT = {
     }
 
 def download_data(run_dict):
-    # url = f'https://prd-tnm.s3.amazonaws.com/StagedProducts/Hydrography/NHDPlusHR/Beta/GDB/NHDPLUS_H_{run_dict["huc4"]}_HU4_GDB.zip'
     url = f'https://prd-tnm.s3.amazonaws.com/StagedProducts/Hydrography/NHDPlusHR/VPU/Current/GDB/NHDPLUS_H_{run_dict["huc4"]}_HU4_GDB.zip'
     zip_path = os.path.join(run_dict['network_directory'], 'NHD.zip')
     unzip_path = os.path.join(run_dict['network_directory'], 'NHD')
@@ -44,9 +43,11 @@ def download_data(run_dict):
     return out_path
 
 
-def merge_reaches(gdb_path, run_dict, merge_short=False):
+def merge_reaches(gdb_path, run_dict, agg_method='length', merge_thresh=None):
     # merge small DA reaches with d/s reachcode
     print('Exporting VAA table from GDB')
+    if os.path.exists(run_dict['network_db_path']):
+        os.remove(run_dict['network_db_path'])
     subprocess.run([OGR_PATH, '-f', 'SQLite', run_dict['network_db_path'], gdb_path, 'NHDPlusFlowlineVAA'])
 
     in_file = open(os.path.join(os.path.dirname(__file__), 'generate_mainstems.sql'), 'r')
@@ -61,19 +62,86 @@ def merge_reaches(gdb_path, run_dict, merge_short=False):
     conn = sqlite3.connect(run_dict['network_db_path'])
     c = conn.cursor()
 
-    [c.execute(q) for q in mainstems]
-    [c.execute(q) for q in refactor]
-    conn.commit()
+    if agg_method == 'length':
+        [c.execute(q) for q in mainstems]
+        balance_lengths(conn, c, thresh=merge_thresh)
+        [c.execute(q) for q in refactor]
+        conn.commit()
+    elif agg_method == 'reachcode':
+        [c.execute(q) for q in mainstems]
+        [c.execute(q) for q in refactor]
+        conn.commit()
 
-    if merge_short:
-        print('Merging short reaches')
-        merge_short_reaches(conn, c)
+        if merge_thresh is not None:
+            print('Merging short reaches')
+            merge_short_reaches(conn, c, length_threshold=merge_thresh)
 
     c.execute('DROP TABLE IF EXISTS reach_data')
     c.execute('UPDATE nhdplusflowlinevaa SET slopelenkm=0 WHERE slopelenkm<0')
     c.execute('CREATE TABLE reach_data (ReachCode REAL, TotDASqKm REAL, max_el REAL, min_el REAL, length REAL, s_order INTEGER, slope REAL GENERATED ALWAYS AS (CASE WHEN ((max_el-min_el)/(length*100)) = 0 THEN 0.00001 ELSE ((max_el-min_el)/(length*100)) END) STORED)')
     c.execute('INSERT INTO reach_data (ReachCode, TotDASqKm, min_el, max_el, length, s_order) SELECT uvm.reachcode, max(nhd.totdasqkm), min(nhd.minelevsmo), max(nhd.maxelevsmo), sum(nhd.slopelenkm)*1000, max(nhd.streamorde) FROM nhdplusflowlinevaa nhd JOIN merged uvm ON uvm.nhdplusid = nhd.nhdplusid WHERE nhd.mainstem=1 GROUP BY uvm.reachcode')
     conn.commit()
+
+def balance_lengths(conn, cur, thresh=1000):
+    mainstems = pd.read_sql_query("SELECT fromnode, tonode, totdasqkm, slopelenkm from nhdplusflowlinevaa where mainstem = 1", conn)
+    mainstems['fromnode'] = mainstems['fromnode'].astype(int).astype(str)
+    mainstems['tonode'] = mainstems['tonode'].astype(int).astype(str)
+    mainstems['totdasqkm'] = mainstems['totdasqkm'].astype(float)
+    # tonode is d/s end of reach, fromnode is u/s end of reach
+    mainstems['length'] = mainstems['slopelenkm'] * 1000
+    mainstems = mainstems.drop(['slopelenkm'], axis=1)
+    mainstems = mainstems.sort_values('totdasqkm', ascending=False)
+    mainstems = mainstems.set_index('fromnode')
+
+    # create traversal dict
+    edge_dict = defaultdict(list)
+    for i, row in mainstems.iterrows():
+        edge_dict[row['tonode']].append(i)
+
+    # Find roots
+    dead_ends = list(set(mainstems['tonode']).difference(set(mainstems.index)))
+    roots = list()
+    [roots.extend(edge_dict[d]) for d in dead_ends]
+    
+    # traverse the network and merge reaches
+    reaches = dict()
+    reach_stack = list()
+    while roots:
+        r = roots.pop(0)
+        tmp_node = r
+        tmp_length = 0
+        working = True
+        while working:
+            reach_stack.append(tmp_node)
+            tmp_length += mainstems.loc[tmp_node]['length']
+            children = edge_dict[tmp_node]
+
+            if tmp_length < thresh:
+                if len(children) == 0:
+                    working = False
+                    # merge with next downstream root (happens in separate sql script)
+                    reach_stack = list()
+                elif len(children) == 1:
+                    tmp_node = children[0]
+                elif len(children) > 1:
+                    roots.extend(children[1:])
+                    tmp_node = children[0]
+            else:
+                working = False
+                roots.extend(children)
+
+        for tmp_node in reach_stack:
+            reaches[tmp_node] = r
+        reach_stack = list()
+    
+    out_df = pd.DataFrame().from_dict(reaches, orient='index', columns=['ReachCode'])
+    out_df.to_sql('crosswalk', conn, if_exists='replace', index_label='fromnode')
+    cur.execute('UPDATE nhdplusflowlinevaa SET reachcode = NULL')
+    cur.execute('UPDATE nhdplusflowlinevaa SET reachcode = c.reachcode FROM (SELECT reachcode, fromnode FROM crosswalk) AS c WHERE c.fromnode = nhdplusflowlinevaa.fromnode')
+    cur.execute('UPDATE nhdplusflowlinevaa SET mainstem = (CASE WHEN nhdplusflowlinevaa.reachcode IS NOT NULL THEN 1 ELSE 0 END)')
+    conn.commit()
+
+
 
 def merge_short_reaches(conn, c, length_threshold=500):
     # Traverse the network in a postorder fashion to identify reaches with length less than 300 meters and merges them with the downstream reach
@@ -211,7 +279,7 @@ def run_all(meta_path):
         run_dict = json.loads(f.read())
 
     gdb_path = download_data(run_dict)
-    merge_reaches(gdb_path, run_dict, merge_short=True)
+    merge_reaches(gdb_path, run_dict, agg_method='length', merge_thresh=1000)
     clip_to_study_area(gdb_path, run_dict)
 
     print('Cleaning up')
