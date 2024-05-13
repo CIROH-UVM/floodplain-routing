@@ -23,7 +23,8 @@ NAME_DICT = {
     }
 
 def download_data(run_dict):
-    url = f'https://prd-tnm.s3.amazonaws.com/StagedProducts/Hydrography/NHDPlusHR/Beta/GDB/NHDPLUS_H_{run_dict["huc4"]}_HU4_GDB.zip'
+    # url = f'https://prd-tnm.s3.amazonaws.com/StagedProducts/Hydrography/NHDPlusHR/Beta/GDB/NHDPLUS_H_{run_dict["huc4"]}_HU4_GDB.zip'
+    url = f'https://prd-tnm.s3.amazonaws.com/StagedProducts/Hydrography/NHDPlusHR/VPU/Current/GDB/NHDPLUS_H_{run_dict["huc4"]}_HU4_GDB.zip'
     zip_path = os.path.join(run_dict['network_directory'], 'NHD.zip')
     unzip_path = os.path.join(run_dict['network_directory'], 'NHD')
 
@@ -219,5 +220,5 @@ def run_all(meta_path):
 
 
 if __name__ == '__main__':
-    meta_path = r'/netfiles/ciroh/floodplainsData/runs/7/run_metadata.json'
+    meta_path = r'/netfiles/ciroh/floodplainsData/runs/8/run_metadata.json'
     run_all(meta_path)
