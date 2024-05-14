@@ -37,10 +37,7 @@ def download_data(run_dict):
     print('Download finished, unzipping')
     with zipfile.ZipFile(zip_path, 'r') as zip_ref:        
         zip_ref.extractall(unzip_path)
-    
-    # out_path = [f for f in os.listdir(unzip_path) if f[-3:] == 'gdb'][0]
-    # out_path = os.path.join(unzip_path, out_path)
-    # return out_path
+
 
 def gdb2sql(run_dict):
     print('Exporting VAA table from GDB')
@@ -67,27 +64,26 @@ def gdb2sql(run_dict):
 
 def merge_reaches(run_dict, agg_method='length', merge_thresh=None):
     # merge small DA reaches with d/s reachcode
+    with open(os.path.join(os.path.dirname(__file__), 'generate_mainstems.sql'), 'r') as in_file:
+        mainstems = in_file.read()
 
-    in_file = open(os.path.join(os.path.dirname(__file__), 'generate_mainstems.sql'), 'r')
-    mainstems = in_file.read().split(';')
-    in_file.close()
-
-    in_file = open(os.path.join(os.path.dirname(__file__), 'refactor_nhd.sql'), 'r')
-    refactor = in_file.read().split(';')
-    in_file.close()
+    with open(os.path.join(os.path.dirname(__file__), 'refactor_nhd.sql'), 'r') as in_file:
+        refactor = in_file.read()
 
     print('Merging reaches and gathering metadata')
     conn = sqlite3.connect(run_dict['network_db_path'])
     c = conn.cursor()
 
     if agg_method == 'length':
-        [c.execute(q) for q in mainstems]
-        balance_lengths(conn, c, thresh=merge_thresh)
-        [c.execute(q) for q in refactor]
+        c.executescript(mainstems)
+        balance_lengths(conn, c, run_dict, thresh=merge_thresh)
+        c.executescript(refactor)
         conn.commit()
     elif agg_method == 'reachcode':
-        [c.execute(q) for q in mainstems]
-        [c.execute(q) for q in refactor]
+        c.executescript(mainstems)
+        c.execute('ALTER TABLE nhdplusflowlinevaa ADD COLUMN id TEXT')
+        c.execute('UPDATE nhdplusflowlinevaa SET id = reachcode')
+        c.executescript(refactor)
         conn.commit()
 
         if merge_thresh is not None:
@@ -96,11 +92,11 @@ def merge_reaches(run_dict, agg_method='length', merge_thresh=None):
 
     c.execute('DROP TABLE IF EXISTS reach_data')
     c.execute('UPDATE nhdplusflowlinevaa SET slopelenkm=0 WHERE slopelenkm<0')
-    c.execute('CREATE TABLE reach_data (ReachCode REAL, TotDASqKm REAL, max_el REAL, min_el REAL, length REAL, s_order INTEGER, slope REAL GENERATED ALWAYS AS (CASE WHEN ((max_el-min_el)/(length*100)) = 0 THEN 0.00001 ELSE ((max_el-min_el)/(length*100)) END) STORED)')
-    c.execute('INSERT INTO reach_data (ReachCode, TotDASqKm, min_el, max_el, length, s_order) SELECT uvm.reachcode, max(nhd.totdasqkm), min(nhd.minelevsmo), max(nhd.maxelevsmo), sum(nhd.slopelenkm)*1000, max(nhd.streamorde) FROM nhdplusflowlinevaa nhd JOIN merged uvm ON uvm.nhdplusid = nhd.nhdplusid WHERE nhd.mainstem=1 GROUP BY uvm.reachcode')
+    c.execute(f'CREATE TABLE reach_data ({run_dict["id_field"]} TEXT, TotDASqKm REAL, max_el REAL, min_el REAL, length REAL, s_order INTEGER, slope REAL GENERATED ALWAYS AS (CASE WHEN ((max_el-min_el)/(length*100)) < 0.00001 THEN 0.00001 ELSE ((max_el-min_el)/(length*100)) END) STORED)')
+    c.execute(f'INSERT INTO reach_data ({run_dict["id_field"]}, TotDASqKm, min_el, max_el, length, s_order) SELECT uvm.id, max(nhd.totdasqkm), min(nhd.minelevsmo), max(nhd.maxelevsmo), sum(nhd.slopelenkm)*1000, max(nhd.streamorde) FROM nhdplusflowlinevaa nhd JOIN merged uvm ON uvm.nhdplusid = nhd.nhdplusid WHERE nhd.mainstem=1 GROUP BY uvm.id')
     conn.commit()
 
-def balance_lengths(conn, cur, thresh=1000):
+def balance_lengths(conn, cur, run_dict, thresh=1000):
     mainstems = pd.read_sql_query("SELECT fromnode, tonode, totdasqkm, slopelenkm from nhdplusflowlinevaa where mainstem = 1", conn)
     mainstems['fromnode'] = mainstems['fromnode'].astype(int).astype(str)
     mainstems['tonode'] = mainstems['tonode'].astype(int).astype(str)
@@ -152,19 +148,19 @@ def balance_lengths(conn, cur, thresh=1000):
             reaches[tmp_node] = r
         reach_stack = list()
     
-    out_df = pd.DataFrame().from_dict(reaches, orient='index', columns=['ReachCode'])
+    out_df = pd.DataFrame().from_dict(reaches, orient='index', columns=['id'])
     out_df.to_sql('crosswalk', conn, if_exists='replace', index_label='fromnode')
-    cur.execute('UPDATE nhdplusflowlinevaa SET reachcode = NULL')
-    cur.execute('UPDATE nhdplusflowlinevaa SET reachcode = c.reachcode FROM (SELECT reachcode, fromnode FROM crosswalk) AS c WHERE c.fromnode = nhdplusflowlinevaa.fromnode')
-    cur.execute('UPDATE nhdplusflowlinevaa SET mainstem = (CASE WHEN nhdplusflowlinevaa.reachcode IS NOT NULL THEN 1 ELSE 0 END)')
+    cur.execute('ALTER TABLE nhdplusflowlinevaa ADD COLUMN id TEXT')
+    cur.execute('UPDATE nhdplusflowlinevaa SET id = c.id FROM (SELECT id, fromnode FROM crosswalk) AS c WHERE c.fromnode = nhdplusflowlinevaa.fromnode')
+    cur.execute('UPDATE nhdplusflowlinevaa SET mainstem = (CASE WHEN nhdplusflowlinevaa.id IS NOT NULL THEN 1 ELSE 0 END)')
     conn.commit()
 
 def merge_short_reaches(conn, c, length_threshold=500):
     # Traverse the network in a postorder fashion to identify reaches with length less than 300 meters and merges them with the downstream reach
-    mainstems = pd.read_sql_query("SELECT fromnode, tonode, reachcode, slopelenkm from nhdplusflowlinevaa where mainstem = 1", conn)
+    mainstems = pd.read_sql_query("SELECT fromnode, tonode, id, slopelenkm from nhdplusflowlinevaa where mainstem = 1", conn)
     mainstems['fromnode'] = mainstems['fromnode'].astype(int).astype(str)
     mainstems['tonode'] = mainstems['tonode'].astype(int).astype(str)
-    mainstems['reachcode'] = mainstems['reachcode'].astype(int).astype(str)
+    mainstems['id'] = mainstems['id'].astype(int).astype(str)
     # tonode is d/s end of reach, fromnode is u/s end of reach
     mainstems['length'] = mainstems['slopelenkm'] * 1000
     mainstems = mainstems.drop(['slopelenkm'], axis=1)
@@ -172,11 +168,11 @@ def merge_short_reaches(conn, c, length_threshold=500):
     # refactor to reachcode level and create new dictionary versions of the network
     edge_dict = defaultdict(list)
     meta_dict = dict()
-    reachcodes = mainstems['reachcode'].unique()
+    reachcodes = mainstems['id'].unique()
     all_nodes = mainstems['fromnode'].unique()
     q = list()
     for r in reachcodes:
-        tmp = mainstems[mainstems['reachcode'] == r]
+        tmp = mainstems[mainstems['id'] == r]
         froms = set(tmp['fromnode'])
         tos = set(tmp['tonode'])
         us = froms.difference(tos).pop()
@@ -185,7 +181,7 @@ def merge_short_reaches(conn, c, length_threshold=500):
             q.append(r)
             meta_dict[r] = {'l': tmp_length}
         else:
-            ds = mainstems[mainstems['fromnode'] == ds]['reachcode'].values[0]
+            ds = mainstems[mainstems['fromnode'] == ds]['id'].values[0]
             tmp_length = tmp['length'].sum()
             edge_dict[ds].append(r)
             meta_dict[r] = {'l': tmp_length, 'ds': ds}
@@ -222,7 +218,7 @@ def merge_short_reaches(conn, c, length_threshold=500):
 
     # Merge short reaches
     for k, v in conversions.items():
-        c.execute(f"UPDATE merged SET ReachCode={k} WHERE ReachCode IN ({','.join([str(i) for i in v])})")
+        c.execute(f"UPDATE merged SET id={k} WHERE id IN ({','.join([str(i) for i in v])})")
     conn.commit()
 
 def clip_to_study_area(run_dict, water_toggle=0.05):
@@ -239,24 +235,28 @@ def clip_to_study_area(run_dict, water_toggle=0.05):
     gdb_path = os.path.join(run_dict['network_directory'], 'NHD', f'NHDPLUS_H_{run_dict["huc4"]}_HU4_GDB.gdb')
     nhd = gpd.read_file(gdb_path, driver='OpenFileGDB', layer='NHDFlowline')
     nhd = nhd[['NHDPlusID', 'geometry']]
+    nhd['NHDPlusID'] = nhd['NHDPlusID'].astype(int).astype(str)
 
     print('Intersecting layers')
     intersected = gpd.overlay(nhd, subbasins[['geometry', 'Code_name']], how='intersection')
 
-    print('Joining Merge Codes')
+    print('Determining subunit membership')
+    intersected = intersected.to_crs('EPSG:4269')
     intersected = intersected.merge(merged, on='NHDPlusID', how='inner')
-    intersected = intersected.merge(meta[['ReachCode', 'TotDASqKm', 'slope']], on='ReachCode', how='left')
-    intersected = intersected.rename(columns={"ReachCode": run_dict["id_field"]})
+    intersected = intersected.rename(columns={"id": run_dict["id_field"]})
     intersected['length'] = intersected.length  # only being used for subunit membership.  Not for slope calculation
     grouped = intersected.groupby([run_dict["id_field"], 'Code_name'])['length'].sum().reset_index()
     max_length_subgroup = grouped.loc[grouped.groupby(run_dict["id_field"])['length'].idxmax()]
-    intersected = intersected.drop(['Code_name'], axis=1)
-    intersected = intersected.merge(max_length_subgroup[[run_dict["id_field"], 'Code_name']], on=run_dict["id_field"], how='left')
+    intersected = intersected[['NHDPlusID', run_dict["id_field"], 'geometry']].merge(max_length_subgroup[[run_dict["id_field"], 'Code_name']], on=run_dict["id_field"], how='left')
     intersected = intersected.merge(subbasins[[c for c in subbasins.columns if c not in ['geometry', 'AreaSqKm']]], on='Code_name', how='left')
+
+    print('Adding attributes')
+    intersected = intersected.merge(meta[[run_dict["id_field"], 'TotDASqKm', 'slope']], on=run_dict["id_field"], how='left')
     
     print('Checking waterbody intersections')
     wbodies = gpd.read_file(gdb_path, driver='OpenFileGDB', layer='NHDWaterbody')
     wbodies = wbodies[wbodies['AreaSqKm'] > 0.05]
+    wbodies = wbodies.to_crs('EPSG:4269')
     wbody_intersect = gpd.overlay(intersected, wbodies[['geometry', 'NHDPlusID']], how='intersection')
     wbody_intersect['w_length'] = wbody_intersect.length
     intersected['length'] = intersected.length
@@ -265,7 +265,9 @@ def clip_to_study_area(run_dict, water_toggle=0.05):
     wbody_intersect = wbody_intersect.merge(old_sums, on=run_dict["id_field"], how='left')
     wbody_intersect['pct_water'] = wbody_intersect['w_length'] / wbody_intersect['length']
     wbody_intersect['wbody'] = wbody_intersect['pct_water'] > water_toggle
+    wbody_intersect = wbody_intersect[wbody_intersect['wbody'] == True].copy()
     intersected = intersected.merge(wbody_intersect[[run_dict["id_field"], 'wbody']], on=run_dict["id_field"], how='left')
+    intersected['wbody'] = intersected['wbody'].fillna(False)
     
     print('Saving to file')
     intersected.to_file(run_dict['flowline_path'])
@@ -274,6 +276,7 @@ def clip_to_study_area(run_dict, water_toggle=0.05):
     print('Loading NHD Catchments')
     nhd = gpd.read_file(gdb_path, driver='OpenFileGDB', layer='NHDPlusCatchment')
     nhd = nhd[['NHDPlusID', 'geometry']]
+    nhd['NHDPlusID'] = nhd['NHDPlusID'].astype(int).astype(str)
 
     print('Subsetting catchments')
     nhd = nhd.merge(intersected, how='inner', on='NHDPlusID')
@@ -282,9 +285,9 @@ def clip_to_study_area(run_dict, water_toggle=0.05):
     nhd.to_file(run_dict['reach_path'])
 
     print('Generating reach metadata table')
-    meta = meta[meta['ReachCode'].isin(nhd[run_dict["id_field"]].unique())]
+    meta = meta[meta[run_dict["id_field"]].isin(nhd[run_dict["id_field"]].unique())]
     subunits = nhd[[run_dict["id_field"], 'Code_name']].drop_duplicates()
-    meta = meta.merge(subunits, how='left', left_on='ReachCode', right_on=run_dict["id_field"])
+    meta = meta.merge(subunits, how='left', on=run_dict["id_field"])
     meta[['8_code', run_dict['subunit_field']]] = meta['Code_name'].str.split('_', expand=True)
     meta[run_dict['unit_field']] = meta['8_code'].map(NAME_DICT)
     meta = meta.merge(wbody_intersect[[run_dict["id_field"], 'wbody']], on=run_dict["id_field"], how='left').fillna(False)
@@ -297,7 +300,7 @@ def run_all(meta_path):
 
     download_data(run_dict)
     gdb2sql(run_dict)
-    merge_reaches(run_dict, agg_method='length', merge_thresh=1000)
+    merge_reaches(run_dict, agg_method='reachcode', merge_thresh=500)
     clip_to_study_area(run_dict)
 
     print('Cleaning up')

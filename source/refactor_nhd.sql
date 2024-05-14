@@ -1,5 +1,5 @@
 DROP TABLE IF EXISTS merged;
-CREATE TABLE merged (NHDPlusID REAL, ReachCode REAL);
+CREATE TABLE merged (NHDPlusID TEXT, id TEXT);
 
 WITH RECURSIVE RecursiveJoin AS (
     SELECT
@@ -7,7 +7,7 @@ WITH RECURSIVE RecursiveJoin AS (
         tonode,
         fromnode,
         totdasqkm,
-		reachcode
+		id
     FROM
         NHDPlusFlowlineVAA
     WHERE
@@ -20,7 +20,7 @@ WITH RECURSIVE RecursiveJoin AS (
         us.tonode,
         us.fromnode,
         us.totdasqkm,
-		ds.reachcode
+		ds.id
     FROM
         NHDPlusFlowlineVAA us
     JOIN
@@ -31,8 +31,8 @@ WITH RECURSIVE RecursiveJoin AS (
 		us.mainstem != 1
 )
 
-INSERT INTO merged (NHDPlusID, ReachCode)
-SELECT nhdplusid, reachcode 
+INSERT INTO merged (NHDPlusID, id)
+SELECT nhdplusid, id 
 FROM RecursiveJoin;
 
 DELETE FROM merged WHERE rowid NOT IN (SELECT MIN(rowid) FROM  merged GROUP BY NHDPlusID);
