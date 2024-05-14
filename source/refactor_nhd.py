@@ -38,17 +38,35 @@ def download_data(run_dict):
     with zipfile.ZipFile(zip_path, 'r') as zip_ref:        
         zip_ref.extractall(unzip_path)
     
-    out_path = [f for f in os.listdir(unzip_path) if f[-3:] == 'gdb'][0]
-    out_path = os.path.join(unzip_path, out_path)
-    return out_path
+    # out_path = [f for f in os.listdir(unzip_path) if f[-3:] == 'gdb'][0]
+    # out_path = os.path.join(unzip_path, out_path)
+    # return out_path
 
-
-def merge_reaches(gdb_path, run_dict, agg_method='length', merge_thresh=None):
-    # merge small DA reaches with d/s reachcode
+def gdb2sql(run_dict):
     print('Exporting VAA table from GDB')
+    gdb_path = os.path.join(run_dict['network_directory'], 'NHD', f'NHDPLUS_H_{run_dict["huc4"]}_HU4_GDB.gdb')
     if os.path.exists(run_dict['network_db_path']):
         os.remove(run_dict['network_db_path'])
     subprocess.run([OGR_PATH, '-f', 'SQLite', run_dict['network_db_path'], gdb_path, 'NHDPlusFlowlineVAA'])
+
+    conn = sqlite3.connect(run_dict['network_db_path'])
+    c = conn.cursor()
+
+    c.execute('CREATE TABLE tmp (fromnode TEXT, tonode TEXT, nhdplusid TEXT PRIMARY KEY, reachcode TEXT, hydroseq TEXT, dnhydroseq TEXT, totdasqkm REAL, minelevsmo REAL, maxelevsmo REAL, slopelenkm REAL, streamorde INTEGER)')
+    c.execute('INSERT INTO tmp SELECT \
+              CAST(CAST(fromnode AS INTEGER) AS TEXT), \
+              CAST(CAST(tonode AS INTEGER) AS TEXT), \
+              CAST(CAST(nhdplusid AS INTEGER) AS TEXT), \
+              CAST(CAST(reachcode AS INTEGER) AS TEXT), \
+              CAST(CAST(hydroseq AS INTEGER) AS TEXT), \
+              CAST(CAST(dnhydroseq AS INTEGER) AS TEXT), \
+              totdasqkm, minelevsmo, maxelevsmo, slopelenkm, streamorde FROM nhdplusflowlinevaa')
+    c.execute('DROP TABLE nhdplusflowlinevaa')
+    c.execute('ALTER TABLE tmp RENAME TO nhdplusflowlinevaa')
+    conn.commit()
+
+def merge_reaches(run_dict, agg_method='length', merge_thresh=None):
+    # merge small DA reaches with d/s reachcode
 
     in_file = open(os.path.join(os.path.dirname(__file__), 'generate_mainstems.sql'), 'r')
     mainstems = in_file.read().split(';')
@@ -141,8 +159,6 @@ def balance_lengths(conn, cur, thresh=1000):
     cur.execute('UPDATE nhdplusflowlinevaa SET mainstem = (CASE WHEN nhdplusflowlinevaa.reachcode IS NOT NULL THEN 1 ELSE 0 END)')
     conn.commit()
 
-
-
 def merge_short_reaches(conn, c, length_threshold=500):
     # Traverse the network in a postorder fashion to identify reaches with length less than 300 meters and merges them with the downstream reach
     mainstems = pd.read_sql_query("SELECT fromnode, tonode, reachcode, slopelenkm from nhdplusflowlinevaa where mainstem = 1", conn)
@@ -209,7 +225,7 @@ def merge_short_reaches(conn, c, length_threshold=500):
         c.execute(f"UPDATE merged SET ReachCode={k} WHERE ReachCode IN ({','.join([str(i) for i in v])})")
     conn.commit()
 
-def clip_to_study_area(gdb_path, run_dict, water_toggle=0.05):
+def clip_to_study_area(run_dict, water_toggle=0.05):
     # Clip flowlines and subcatchments to catchments of interest
     print('Loading Merged VAA table')
     conn = sqlite3.connect(run_dict['network_db_path'])
@@ -220,6 +236,7 @@ def clip_to_study_area(gdb_path, run_dict, water_toggle=0.05):
     subbasins = gpd.read_file(run_dict['subunit_path'])
 
     print('Loading NHD Flowlines')
+    gdb_path = os.path.join(run_dict['network_directory'], 'NHD', f'NHDPLUS_H_{run_dict["huc4"]}_HU4_GDB.gdb')
     nhd = gpd.read_file(gdb_path, driver='OpenFileGDB', layer='NHDFlowline')
     nhd = nhd[['NHDPlusID', 'geometry']]
 
@@ -278,9 +295,10 @@ def run_all(meta_path):
     with open(meta_path, 'r') as f:
         run_dict = json.loads(f.read())
 
-    gdb_path = download_data(run_dict)
-    merge_reaches(gdb_path, run_dict, agg_method='length', merge_thresh=1000)
-    clip_to_study_area(gdb_path, run_dict)
+    download_data(run_dict)
+    gdb2sql(run_dict)
+    merge_reaches(run_dict, agg_method='length', merge_thresh=1000)
+    clip_to_study_area(run_dict)
 
     print('Cleaning up')
     shutil.rmtree(os.path.join(run_dict['network_directory'], 'NHD'))
