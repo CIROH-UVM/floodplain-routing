@@ -70,7 +70,7 @@ def gage_areas_from_poly_gdal(shp_path, id_field, dem_filter, save_path=None, re
     subunits = ogr.Open(shp_path)
     subunits_layer = subunits.GetLayer()
     if len(reaches) == 1:
-        subunits_layer.SetAttributeFilter(f"{id_field} = {reaches[0]}")
+        subunits_layer.SetAttributeFilter(f"{id_field} = '{reaches[0]}'")
     elif len(reaches) > 1:
         subunits_layer.SetAttributeFilter(f"{id_field} in {tuple(reaches)}")
 
@@ -99,7 +99,7 @@ def gage_areas_from_poly_gdal(shp_path, id_field, dem_filter, save_path=None, re
 
 
 def reach_hydraulics(r, thiessens, elevations, slope, el_nd, resolution, bins):
-    mask = thiessens == r  # Select cells within reach area of interest
+    mask = thiessens == int(r)  # Select cells within reach area of interest
     mask = np.logical_and(mask, elevations != el_nd)  # Select cells with valid HAND elevation
     mask = np.logical_and(mask, elevations < bins.max())  # Select cells with HAND elevation within range of interest
     tmp_elevations = elevations[mask]
