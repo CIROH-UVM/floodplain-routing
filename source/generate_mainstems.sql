@@ -1,5 +1,5 @@
 DROP TABLE IF EXISTS mainstems;
-CREATE TABLE mainstems (NHDPlusID REAL);
+CREATE TABLE mainstems (NHDPlusID TEXT);
 
 WITH RECURSIVE RecursiveJoin AS (
 	SELECT
