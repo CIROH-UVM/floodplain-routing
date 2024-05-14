@@ -241,7 +241,6 @@ def clip_to_study_area(run_dict, water_toggle=0.05):
     intersected = gpd.overlay(nhd, subbasins[['geometry', 'Code_name']], how='intersection')
 
     print('Determining subunit membership')
-    intersected = intersected.to_crs('EPSG:4269')
     intersected = intersected.merge(merged, on='NHDPlusID', how='inner')
     intersected = intersected.rename(columns={"id": run_dict["id_field"]})
     intersected['length'] = intersected.length  # only being used for subunit membership.  Not for slope calculation
@@ -256,7 +255,6 @@ def clip_to_study_area(run_dict, water_toggle=0.05):
     print('Checking waterbody intersections')
     wbodies = gpd.read_file(gdb_path, driver='OpenFileGDB', layer='NHDWaterbody')
     wbodies = wbodies[wbodies['AreaSqKm'] > 0.05]
-    wbodies = wbodies.to_crs('EPSG:4269')
     wbody_intersect = gpd.overlay(intersected, wbodies[['geometry', 'NHDPlusID']], how='intersection')
     wbody_intersect['w_length'] = wbody_intersect.length
     intersected['length'] = intersected.length
@@ -300,7 +298,7 @@ def run_all(meta_path):
 
     download_data(run_dict)
     gdb2sql(run_dict)
-    merge_reaches(run_dict, agg_method='reachcode', merge_thresh=500)
+    merge_reaches(run_dict, agg_method='length', merge_thresh=1000)
     clip_to_study_area(run_dict)
 
     print('Cleaning up')
