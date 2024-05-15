@@ -344,7 +344,7 @@ def map_edz(hand_path, aoi_path, reach_field, reach_data):
         print(f'{counter} / {len(reaches)}', end="\r")
         tmp_reach = reach_data[reach_data[reach_field] == r]
 
-        reach_mask = (thiessens['data'] == r)
+        reach_mask = (thiessens['data'] == int(r))
         edz_mask = np.logical_and((elevations['data'] > tmp_reach['el_edap'].values[0]), (elevations['data'] < tmp_reach['el_edep'].values[0]))
         combo_mask = np.logical_and(reach_mask, edz_mask)
 
