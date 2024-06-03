@@ -1,6 +1,6 @@
 import numpy as np
 import pandas as pd
-import geopandas as gpd
+import sys
 import os
 from scipy.ndimage import gaussian_filter1d
 from scipy.interpolate import splev, splrep
@@ -11,7 +11,7 @@ import json
 with open('source/regressions.json') as in_file:
     REGRESSIONS = json.load(in_file)
 
-FEATURE_NAMES = ['length', 'slope', 'DASqKm', 'wbody', 'ave_rhp', 'stdev_rhp', 'Ave_Rh', 'cumulative_volume', 'cumulative_height', 'valley_confinement', 'el_bathymetry', 'el_edap', 'el_min', 'el_edep', 'el_bathymetry_scaled', 'el_edap_scaled', 'el_min_scaled', 'el_edep_scaled', 'height', 'height_scaled', 'vol', 'vol_scaled', 'min_rhp', 'slope_start_min', 'slope_min_stop', 'rh_bottom', 'rh_edap', 'rh_min', 'rh_edep', 'w_bottom', 'w_edap', 'w_min', 'w_edep', 'edz_count', 'min_loc_ratio', 'rhp_pre', 'rhp_post', 'rhp_post_stdev', 'invalid_geometry', 'regression_valley_confinement', 'streamorder']
+FEATURE_NAMES = ['length', 'slope', 'DASqKm', 'wbody', 'ave_rhp', 'stdev_rhp', 'Ave_Rh', 'cumulative_volume', 'cumulative_height', 'valley_confinement', 'el_bathymetry', 'el_edap', 'el_min', 'el_edep', 'el_bathymetry_scaled', 'el_edap_scaled', 'el_min_scaled', 'el_edep_scaled', 'height', 'height_scaled', 'vol', 'vol_scaled', 'min_rhp', 'slope_start_min', 'slope_min_stop', 'rh_bottom', 'rh_edap', 'rh_min', 'rh_edep', 'w_bottom', 'w_edap', 'w_min', 'w_edep', 'w_edap_scaled', 'w_edep_scaled', 'edz_count', 'min_loc_ratio', 'rhp_pre', 'rhp_post', 'rhp_post_stdev', 'invalid_geometry', 'regression_valley_confinement', 'streamorder']
 ERROR_ARRAY = [np.nan for i in FEATURE_NAMES]
 ERROR_DICT = {k: np.nan for k in FEATURE_NAMES}
 
@@ -28,7 +28,7 @@ class ReachPlot:
         self.has_geom = False
 
         # Add labels
-        self.section_ax.set_xlabel('Station (m / bkf_w) (unitless)', fontsize=10)
+        self.section_ax.set_xlabel('Station (m)', fontsize=10)
         self.section_ax.set_ylabel('Stage / Bankfull Depth', fontsize=10)
         self.rh_ax.set_xlabel(r'$R_{h}$', fontsize=10)
         self.rhp_ax.set_xlabel(r"$R_{h}$'", fontsize=10)
@@ -44,7 +44,7 @@ class ReachPlot:
         width = width / 2
         width = np.append(-width[::-1], width)
         width = width - min(width)
-        width = width / (2.44 * (self.da ** 0.34))
+        # width = width / (2.44 * (self.da ** 0.34))
         section_el = np.append(el[::-1], el)
 
         # Cache geometry
@@ -149,7 +149,7 @@ def get_edzs(el, el_scaled, rh, rh_prime, widths, thresh=0.5, max_stage=2.5):
         height = stop_el - start_el
         height_scaled = stop_el_scaled - start_el_scaled
 
-        argmin = min(1, np.argmin(tmp_rhp)) + start
+        argmin = max(1, np.argmin(tmp_rhp)) + start  # just updated, was min.  Whoops
         min_val = rh_prime[argmin]
         el_argmin = el[argmin]
         el_argmin_scaled = el_scaled[argmin]
@@ -309,27 +309,31 @@ def extract_features(run_path, plot=False, subset=None):
 
     # Get reaches
     valid_reaches = set(reach_data.index.tolist())
-    valid_reaches = valid_reaches.intersection(el_data.columns)
-    valid_reaches = valid_reaches.intersection(rh_data.columns)
-    valid_reaches = valid_reaches.intersection(rh_prime_data.columns)
-    valid_reaches = valid_reaches.intersection(area_data.columns)
-    valid_reaches = valid_reaches.intersection(volume_data.columns)
     if subset:
         valid_reaches = valid_reaches.intersection(subset)
     valid_reaches = sorted(valid_reaches)
     
     # Extract features
     features = pd.DataFrame(columns=FEATURE_NAMES, index=valid_reaches)
+    counter = 0
     for reach in list(valid_reaches):
-        print(reach)
+        if counter % 100 == 0:
+            print(f'{counter} / {len(valid_reaches)} reaches processed')
+        counter += 1
         # Subset data
         tmp_meta = reach_data.loc[reach]
-        tmp_el = el_data[reach].to_numpy()
-        tmp_el_scaled = el_scaled_data[reach].to_numpy()
-        tmp_rh = rh_data[reach].to_numpy()
-        tmp_rh_prime = rh_prime_data[reach].to_numpy()
-        tmp_area = area_data[reach].to_numpy() / tmp_meta['length']
-        tmp_volume = volume_data[reach].to_numpy() / tmp_meta['length']
+        try:
+            tmp_el = el_data[reach].to_numpy()
+            tmp_el_scaled = el_scaled_data[reach].to_numpy()
+            tmp_rh = rh_data[reach].to_numpy()
+            tmp_rh_prime = rh_prime_data[reach].to_numpy()
+            tmp_area = area_data[reach].to_numpy() / tmp_meta['length']
+            tmp_volume = volume_data[reach].to_numpy() / tmp_meta['length']
+        except KeyError:
+            if plot:
+                reach_plot.no_geometry()
+            features.loc[reach, 'invalid_geometry'] = 1
+            continue
 
         if plot:
             slope = tmp_meta['slope']
@@ -422,6 +426,8 @@ def extract_features(run_path, plot=False, subset=None):
             features.loc[reach, 'w_edap'] = main_edz['w_edap']
             features.loc[reach, 'w_min'] = main_edz['w_min']
             features.loc[reach, 'w_edep'] = main_edz['w_edep']
+            features.loc[reach, 'w_edap_scaled'] = main_edz['w_edap'] / (3.12 * (tmp_meta['TotDASqKm'] ** 0.415))
+            features.loc[reach, 'w_edep_scaled'] = main_edz['w_edep'] / (3.12 * (tmp_meta['TotDASqKm'] ** 0.415))
             features.loc[reach, 'edz_count'] = edz_count
             features.loc[reach, 'min_loc_ratio'] = min_loc_ratio
             features.loc[reach, 'rhp_pre'] = rhp_pre
@@ -440,9 +446,9 @@ def extract_features(run_path, plot=False, subset=None):
         merge_df = run_dict['muskingum_path']
 
         merge_df = pd.read_csv(merge_df)
-        merge_df[run_dict['id_field']] = merge_df['ReachCode'].astype(int).astype(str)
+        merge_df[run_dict['id_field']] = merge_df[run_dict['id_field']].astype(int).astype(str)
         merge_df = merge_df.set_index(run_dict['id_field'])
-        merge_df = merge_df.drop(columns=['ReachCode', 'DASqKm', 'slope'])
+        merge_df = merge_df.drop(columns=['DASqKm', 'slope'])
 
         out_df = merge_df.merge(features, how='inner', left_index=True, right_index=True)
     else:
@@ -452,6 +458,6 @@ def extract_features(run_path, plot=False, subset=None):
 
 
 if __name__ == '__main__':
-    run_path = r'/netfiles/ciroh/floodplainsData/runs/7/run_metadata.json'
-    subset = ['4300103000694']
-    extract_features(run_path, plot=False, subset=None)
+    run_path = sys.argv[1]
+    subset = ['60000200039195']
+    extract_features(run_path, plot=True, subset=None)
