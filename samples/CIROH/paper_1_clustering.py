@@ -1389,6 +1389,64 @@ def main7():
     clusterer.plot_routing()
     clusterer.feature_data[['cluster']].to_csv(os.path.join(clusterer.out_dir, 'clustered_data.csv'))
 
+def main8():
+    run_path = r'/netfiles/ciroh/floodplainsData/runs/8/run_metadata.json'
+    clusterer = Clusterer(run_path)
+    clusterer.feature_data['cluster'] = np.nan
+    os.makedirs(clusterer.out_dir, exist_ok=True)
+
+    # Clean data and add floodplain slope feature
+    clusterer.feature_data.loc[clusterer.feature_data['w_edep'] > 5000, 'w_edep'] = 5000
+    clusterer.wbody_removal()
+    clusterer.slope_removal(3 * (10 ** -3))
+    clusterer.vc_removal(1.5)
+    features = ['el_edap_scaled', 'el_edep_scaled', 'height_scaled', 'w_edep', 'valley_confinement', 'min_rhp', 'vol']
+    trans_dict = clusterer.preprocess_features(features, norm_type='standard')
+    print(f'n={clusterer.X.shape[0]}')
+
+    # # EDA
+    # fig, ax = multi_elbow(clusterer.X)
+    # fig.savefig(os.path.join(clusterer.out_dir, 'multi_elbow_plot.png'), dpi=300)
+    # pca = PCA(n_components=len(features))
+    # pca.fit(clusterer.X)
+    # fig, ax = plt.subplots()
+    # ax.bar(range(1, len(features) + 1), pca.explained_variance_ratio_)
+    # ax2 = ax.twinx()
+    # ax2.plot(range(1, len(features) + 1), np.cumsum(pca.explained_variance_ratio_), color='r')
+    # ax.set(ylim=(0, 1.1), yticks=[0, 0.2, 0.4, 0.6, 0.8, 1], xlabel='Principal Component', ylabel='Explained Variance Ratio')
+    # ax2.set(ylim=(0, 1.1), yticks=[0, 0.2, 0.4, 0.6, 0.8, 1], xlabel='Principal Component', ylabel='Cumulative Explained Variance Ratio')
+    # fig.savefig(os.path.join(clusterer.out_dir, 'pca_plot.png'), dpi=300)
+
+    # # Dimensionality reduction
+    # clusterer.calc_embedding(method='tsne')
+
+    # Cluster
+    clusterer.clusterer = KMedoids(n_clusters=8, random_state=0)
+    clusterer.cluster()
+    # clusterer.vis_clusters()
+
+    # vis hydraulics
+    clusterer.cpal = {i: c for i, c in enumerate(['#FF5733', '#FFC300', '#219c21', '#3366FF', '#FF33EA', '#15e8d2', '#FF3366', '#CC33FF', '#33CCFF'])}
+    clusterer.plot_simple_hydraulics(clusterer.medoid_dict)
+
+    rename_dict = {
+        'el_edap_scaled': 'EDAP',
+        'height_scaled': 'Height',
+        'w_edep': 'Valley Width',
+        'valley_confinement': 'Valley Confinement',
+        'vol': 'Size',
+        'min_rhp': 'Abruptness',
+        'slope': 'Slope',
+        'DASqKm': 'Drainage Area (sqkm)',
+        'regression_valley_confinement': 'Valley Confinement (Regression)',
+        'streamorder': 'Stream Order',
+        'celerity_detrended': 'Shape Celerity (m^(2/3))',
+        'celerity': 'Celerity (m/s)'
+    }
+    clusterer.feature_data = clusterer.feature_data.rename(columns=rename_dict)
+    clusterer.plot_feature_boxplots()
+    clusterer.plot_boxplots_general(['Drainage Area (sqkm)', 'Valley Confinement (Regression)', 'Stream Order', 'Slope'])
+    clusterer.feature_data[['cluster']].to_csv(os.path.join(clusterer.out_dir, 'clustered_data.csv'))
 
 if __name__ == '__main__':
     # main()
@@ -1401,4 +1459,5 @@ if __name__ == '__main__':
     # ml_ai_eda()
     # main6()
     # hydrofabric()
-    main7()
+    # main7()
+    main8()

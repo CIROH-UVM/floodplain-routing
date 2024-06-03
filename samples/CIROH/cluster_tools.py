@@ -13,6 +13,7 @@ from sklearn_extra.cluster import KMedoids
 from sklearn.mixture import GaussianMixture
 import json
 from scipy.ndimage import gaussian_filter1d
+import colorsys
 
 
 class ClusterCollection:
@@ -23,6 +24,7 @@ class ClusterCollection:
         self.trans_features = None
         self.embedding = None
         self.feature_cols = None
+        self.norm_type = None
         self.medoid_dict = dict()
         self.colors = ["#FF5733", "#FFBD33", "#FF3381", "#33FFC8", "#3364FF", "#FF3364", "#33FF57", "#33C8FF", "#33FFBD", "#64FF33", "#BD33FF", "#FFC833", "#FF33BD", "#C8FF33", "#57FF33", "#FF33C8"]
 
@@ -46,6 +48,7 @@ class ClusterCollection:
 
     def preprocess_features(self, feature_cols, target_cls, norm_type='min-max'):
         self.feature_cols = feature_cols
+        self.norm_type = norm_type
         mask = self.clusters['cluster'] == target_cls
         X = self.features[mask][feature_cols].values
 
@@ -77,6 +80,8 @@ class ClusterCollection:
             clusterer = KMeans(n_clusters=n_clusters, random_state=0)
         elif method == 'kmedoids':
             clusterer = KMedoids(n_clusters=n_clusters, random_state=0)
+        elif method == 'spectral':
+            clusterer = SpectralClustering(n_clusters=n_clusters, random_state=0)
 
         labels = clusterer.fit_predict(self.trans_features[mask])
         self.clusters.iloc[mask, 0] = labels
@@ -115,12 +120,14 @@ class ClusterCollection:
     def multi_elbow(self, target_cls, max_bins=20):
         mask = self.clusters['cluster'] == target_cls
         data = self.trans_features[mask]
+        inertia_scores = {'kmeans': list(), 'spectral': list(), 'agglomerative': list(), 'kmedoids': list(), 'gmm': list()}
         ch_scores = {'kmeans': list(), 'spectral': list(), 'agglomerative': list(), 'kmedoids': list(), 'gmm': list()}
         sil_scores = {'kmeans': list(), 'spectral': list(), 'agglomerative': list(), 'kmedoids': list(), 'gmm': list()}
         cluster_counts = list(range(2, max_bins))
         for i in cluster_counts:
             kmeans = KMeans(n_clusters=i, n_init='auto', random_state=0)
             kmeans.fit(data)
+            inertia_scores['kmeans'].append(kmeans.inertia_)
             ch_scores['kmeans'].append(calinski_harabasz_score(data, kmeans.labels_))
             sil_scores['kmeans'].append(silhouette_score(data, kmeans.labels_))
 
@@ -136,6 +143,7 @@ class ClusterCollection:
 
             kmedoids = KMedoids(n_clusters=i, random_state=0)
             kmedoids.fit(data)
+            inertia_scores['kmedoids'].append(kmedoids.inertia_)
             ch_scores['kmedoids'].append(calinski_harabasz_score(data, kmedoids.labels_))
             sil_scores['kmedoids'].append(silhouette_score(data, kmedoids.labels_))
 
@@ -144,16 +152,20 @@ class ClusterCollection:
             ch_scores['gmm'].append(calinski_harabasz_score(data, gmm.predict(data)))
             sil_scores['gmm'].append(silhouette_score(data, gmm.predict(data)))
 
-        fig, ax = plt.subplots(nrows=2)
+        fig, ax = plt.subplots(nrows=3, figsize=(6, 9))
         for i in ch_scores:
             ax[0].plot(cluster_counts, ch_scores[i], label=i, alpha=0.5)
             ax[1].plot(cluster_counts, sil_scores[i], alpha=0.5)
+            if i == 'kmeans' or i == 'kmedoids':
+                ax[2].plot(cluster_counts, inertia_scores[i], alpha=0.5)
         for i in cluster_counts:
             ax[0].axvline(i, color='k', linewidth=0.3, alpha=0.2)
             ax[1].axvline(i, color='k', linewidth=0.3, alpha=0.2)
+            ax[2].axvline(i, color='k', linewidth=0.3, alpha=0.2)
 
         ax[0].set(ylabel='Calinski Harabasz Score', xticks=cluster_counts)
         ax[1].set(ylabel='Silhouette Score', xlabel='Number of Clusters', xticks=cluster_counts)
+        ax[2].set(ylabel='Inertia', xlabel='Number of Clusters', xticks=cluster_counts)
 
         ax[0].legend(loc='center right', fontsize=9)
         fig.tight_layout()
@@ -221,19 +233,19 @@ class FpClusterer(ClusterCollection):
         self.rh_prime_data = rh_prime_data.dropna(axis=1)
 
         # Add attenuation
-        if os.path.exists(run_dict['muskingum_path']):
-            magnitudes = ['Q2', 'Q10', 'Q50', 'Q100']
-            durations = ['Short', 'Medium', 'Long']
+        # if os.path.exists(run_dict['muskingum_path']):
+        #     magnitudes = ['Q2', 'Q10', 'Q50', 'Q100']
+        #     durations = ['Short', 'Medium', 'Long']
 
-            with open(r'source/regressions.json', 'r') as f:
-                regressions = json.loads(f.read())
-            regressions = regressions['peak_flowrate']
-            for m in magnitudes:
-                peak_estimate = ((self.features['DASqKm'].to_numpy() / 2.59) ** regressions[m][1]) * regressions[m][0] * (1 / 35.3147)
-                for d in durations:
-                    self.features[f'{m}_{d}_cms_attenuation'] = self.features[f'{m}_{d}_pct_attenuation'] * peak_estimate
-                    total_lengths = (self.features[f'{m}_{d}_dx'] * self.features[f'{m}_{d}_subreaches']) / 1000
-                    self.features[f'{m}_{d}_cms_attenuation_per_km'] = self.features[f'{m}_{d}_cms_attenuation'] / total_lengths
+        #     with open(r'source/regressions.json', 'r') as f:
+        #         regressions = json.loads(f.read())
+        #     regressions = regressions['peak_flowrate']
+        #     for m in magnitudes:
+        #         peak_estimate = ((self.features['DASqKm'].to_numpy() / 2.59) ** regressions[m][1]) * regressions[m][0] * (1 / 35.3147)
+        #         for d in durations:
+        #             self.features[f'{m}_{d}_cms_attenuation'] = self.features[f'{m}_{d}_pct_attenuation'] * peak_estimate
+        #             total_lengths = (self.features[f'{m}_{d}_dx'] * self.features[f'{m}_{d}_subreaches']) / 1000
+        #             self.features[f'{m}_{d}_cms_attenuation_per_km'] = self.features[f'{m}_{d}_cms_attenuation'] / total_lengths
 
         self.feature_cols = feature_cols
         self.clusters = pd.DataFrame(index=self.features.index, columns=['cluster'])
@@ -336,6 +348,10 @@ class FpClusterer(ClusterCollection):
         transformed_df = pd.DataFrame(self.trans_features, columns=self.feature_cols)
         transformed_df['cluster'] = self.clusters['cluster'].to_numpy()
         ord = sorted(transformed_df['cluster'].unique())
+        for col in self.feature_cols:
+            for c in ord:
+                subset = self.features[self.clusters['cluster'] == c]
+                print(f'{c} {col} median: {subset[col].median()}')
 
         cols = int(np.ceil(np.sqrt(len(self.feature_cols))))
         rows = int(len(self.feature_cols) / cols) + 1
@@ -343,6 +359,12 @@ class FpClusterer(ClusterCollection):
         rows = np.ceil(len(self.feature_cols) / cols).astype(int)
         
         fig, axs = plt.subplots(ncols=cols, nrows=rows, figsize=(13, 9), sharey=True, sharex=True)
+        if self.norm_type == 'standard':
+            ylims = (-3.25, 3.25)
+            yticks = np.arange(-3, 3, 1)
+        else:
+            ylims = (0, 1)
+            yticks = np.arange(0, 1, 0.2)
         if len(self.feature_cols) % cols == 1:
             axs[-1, 0].remove()
             axs[-1, 2].remove()
@@ -353,15 +375,20 @@ class FpClusterer(ClusterCollection):
         for i, ax in enumerate(ax_list):
             c = self.feature_cols[i]
             sns.boxplot(x='cluster', y=c, data=transformed_df, ax=ax, palette=self.cpal, order=ord, showfliers=False)
-            ax.set(xlabel=None, ylabel=None, title=c, facecolor='#f5f5f5')
+            ax.set(xlabel=None, ylabel=None, title=c, facecolor='#f5f5f5', ylim=ylims, yticks=yticks)
         
         fig.tight_layout()
-        fig.savefig(os.path.join(self.out_dir, 'feature_boxplots.png'), dpi=300)
+        # fig.savefig(os.path.join(self.out_dir, 'feature_boxplots.png'), dpi=300)
+        fig.savefig(os.path.join(self.out_dir, 'feature_boxplots.pdf'), dpi=300)
 
     def plot_boxplots_general(self, col_list):
         cols = len(col_list)
         rows = 1
         ord = sorted(self.clusters['cluster'].unique())
+        for col in col_list:
+            for c in ord:
+                subset = self.features[self.clusters['cluster'] == c]
+                print(f'{c} {col} median: {subset[col].median()}')
 
         fig, axs = plt.subplots(ncols=cols, nrows=rows, figsize=(4.33 * cols, 2.66 * rows), sharex=True)
         tmp_merge = self.features.merge(self.clusters, left_index=True, right_index=True)
@@ -374,7 +401,8 @@ class FpClusterer(ClusterCollection):
             i += 1
 
         fig.tight_layout()
-        fig.savefig(os.path.join(self.out_dir, 'misc_boxplots.png'), dpi=300)
+        # fig.savefig(os.path.join(self.out_dir, 'misc_boxplots.png'), dpi=300)
+        fig.savefig(os.path.join(self.out_dir, 'misc_boxplots.pdf'), dpi=300)
 
     def plot_summary(self):
         clusters = self.clusters['cluster'].unique()
@@ -391,7 +419,8 @@ class FpClusterer(ClusterCollection):
         w_axs = self._plot_sec_medoid(w_axs)
     
         fig.tight_layout()
-        fig.savefig(os.path.join(self.out_dir, 'cluster_summary.png'), dpi=300)
+        # fig.savefig(os.path.join(self.out_dir, 'cluster_summary.png'), dpi=300)
+        fig.savefig(os.path.join(self.out_dir, 'cluster_summary.pdf'), dpi=300)
 
     def plot_routing(self):
         ord = sorted(self.clusters['cluster'].unique())
@@ -404,15 +433,16 @@ class FpClusterer(ClusterCollection):
         tmp_merge = self.features.merge(self.clusters, left_index=True, right_index=True)
         cms_melt = pd.melt(tmp_merge, id_vars='cluster', value_vars=value_cols, var_name='Event', value_name=cms_label)
         cms_melt['Event'] = cms_melt['Event'].apply(lambda x: rename_dict[x])
-        cms_melt[cms_label] = cms_melt[cms_label].clip(lower=0)
+        # cms_melt[cms_label] = cms_melt[cms_label].clip(lower=0)
+        cms_melt[cms_label][cms_melt[cms_label] < 0] = np.nan
 
         pct_label = 'Attenuation Per Km (pct)'
         value_cols = [f'{m}_Medium_pct_attenuation_per_km' for m in magnitudes]
         rename_dict = {i: j for i, j in zip(value_cols, lables)}
         pct_melt = pd.melt(tmp_merge, id_vars='cluster', value_vars=value_cols, var_name='Event', value_name=pct_label)
         pct_melt['Event'] = pct_melt['Event'].apply(lambda x: rename_dict[x])
-        pct_melt[pct_label] = pct_melt[pct_label].clip(lower=0)
-
+        # pct_melt[pct_label] = pct_melt[pct_label].clip(lower=0)
+        pct_melt[pct_label][pct_melt[pct_label] < 0] = np.nan
 
         fig, axs = plt.subplots(ncols=2, nrows=2, figsize=(13, 9))
         sns.boxplot(x='Event', y=cms_label, hue='cluster', data=cms_melt, ax=axs[0, 0], palette=self.cpal, showfliers=False, hue_order=ord)
@@ -428,7 +458,36 @@ class FpClusterer(ClusterCollection):
                 axs[i, j].set_facecolor('#f5f5f5')
 
         fig.tight_layout()
-        fig.savefig(os.path.join(self.out_dir, 'routing_plot.png'), dpi=300)
+        # fig.savefig(os.path.join(self.out_dir, 'routing_plot.png'), dpi=300)
+        fig.savefig(os.path.join(self.out_dir, 'routing_plot.pdf'), dpi=300)
 
     def save_clusters(self):
         self.clusters.to_csv(os.path.join(self.out_dir, 'clustered_features.csv'))
+
+    def save_all_data(self):
+        out_df = self.features.copy()
+        cols = [f + '_transformed' for f in self.feature_cols]
+        trans_features = pd.DataFrame(self.trans_features, columns=cols, index=self.features.index)
+        out_df = pd.concat([out_df, trans_features], axis=1) 
+        out_df = pd.concat([out_df, self.clusters], axis=1)
+        out_df.to_csv(os.path.join(self.out_dir, 'all_data.csv'))    
+
+    def plot_clusters(self):
+        fig, ax = plt.subplots()
+        for c in self.clusters['cluster'].unique():
+            mask = self.clusters['cluster'] == c
+            ax.scatter(self.embedding[mask, 0], self.embedding[mask, 1], c=self.cpal[c], label=c, alpha=0.5)
+        ax.legend()
+        fig.savefig(os.path.join(self.out_dir, 'cluster_plot.png'), dpi=300)
+
+    def make_colors(self, n):
+        hue_range = np.array((0, (275 * (n / (n + 1)))))
+        hue_range += 275  # start at blue
+        hues = np.linspace(hue_range[0], hue_range[1], n) / 360.0
+        saturations = np.repeat(0.75, n)
+        lightnesses = np.repeat(0.5, n)
+        self.colors = [colorsys.hls_to_rgb(h, l, s) for h, s, l in zip(hues, saturations, lightnesses)]
+        self.colors.append('#3675D3')
+        self.colors.append('#736A59')
+
+    
