@@ -10,3 +10,4 @@ ARCHIVE
 working
 *__pycache__*
 whitebox_tools
+.vscode
