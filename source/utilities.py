@@ -266,16 +266,21 @@ def add_bathymetry(geom, da, slope):
     filter_arg = max(filter_arg, 2)  # need at least two 
     top_width = geom['area'][filter_arg]
     #  Use regression of Read et al 2023. https://onlinelibrary.wiley.com/doi/full/10.1111/1752-1688.13134
-    top_width = min(top_width, (2.44 * (da ** 0.34)))  # try to use NWM channel top-width, unless it would lead to decreasing top-width
+    bottom_width = min(top_width, (2.44 * (da ** 0.34)))  # try to use NWM channel top-width, unless it would lead to decreasing top-width
     flowrate = (0.4962 * da) / 35.3147  # Diehl Estimate
-    n = 0.035
+    n = 0.01
     max_space = 2 * (0.26 * (da ** 0.287))  # Cap at 2xbkfl
     stage_inc = np.median(geom['el'][1:] - geom['el'][:-1])
     stage_space = np.arange(0, max_space, stage_inc)
+    width_space = np.linspace(bottom_width, top_width, stage_space.shape[0])
+    dw = width_space[1:] - width_space[:-1]
+    ds = stage_space[1:] - stage_space[:-1]
+    dp = np.sqrt((dw ** 2) + (ds ** 2))
+    dp = np.insert(dp, 0, dp[0])
 
     # Assume rectangular channel
     area = (stage_space * top_width)
-    perimeter = (top_width + (2 * stage_space))
+    perimeter = (bottom_width + (2 * dp))
 
     flowrate_space = (1 / n) * (stage_space * top_width) * (slope ** 0.5) * ((area / perimeter) ** (2 / 3))
     channel_ind = np.argmax(flowrate_space > flowrate)
