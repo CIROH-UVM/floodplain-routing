@@ -1,4 +1,5 @@
 import os
+import sys
 import time
 import pandas as pd
 import geopandas as gpd
@@ -19,8 +20,7 @@ def topographic_signatures(meta_path):
         max_stage_equation = lambda da: 10
 
     # Load reaches/basins to run
-    reaches = pd.read_csv(run_dict['reach_meta_path'], dtype={'12_code': str})
-    # reaches = reaches[reaches['ReachCode'].isin([4300107001240, 4300107001221, 4300107000250])]
+    reaches = pd.read_csv(run_dict['reach_meta_path'], dtype={'12_code': str, run_dict['id_field']: str})
     units = reaches[run_dict['unit_field']].unique()
 
     # Initialize logging
@@ -89,7 +89,9 @@ def batch_add_bathymetry(meta_path):
     geometry = {'el': pd.read_csv(os.path.join(run_dict['geometry_directory'], 'el.csv')),
                 'area': pd.read_csv(os.path.join(run_dict['geometry_directory'], 'area.csv')),
                 'vol': pd.read_csv(os.path.join(run_dict['geometry_directory'], 'vol.csv')),
-                'p': pd.read_csv(os.path.join(run_dict['geometry_directory'], 'p.csv'))}
+                'p': pd.read_csv(os.path.join(run_dict['geometry_directory'], 'p.csv')),
+                'rh': pd.read_csv(os.path.join(run_dict['geometry_directory'], 'rh.csv')),
+                'rh_prime': pd.read_csv(os.path.join(run_dict['geometry_directory'], 'rh_prime.csv'))}
     reach_data = pd.read_csv(run_dict['reach_meta_path'])
     reach_data = reach_data.dropna(subset=[run_dict['id_field']])
     reach_data[run_dict['id_field']] = reach_data[run_dict['id_field']].astype(np.int64).astype(str)
@@ -109,7 +111,8 @@ def batch_add_bathymetry(meta_path):
     out_dfs['rh_prime'] = pd.DataFrame()
     
     for reach in valid_columns:
-        print(f'{counter} / {len(valid_columns)} | {round((len(valid_columns) - counter) * ((time.perf_counter() - t_start) / counter), 1)} seconds left')
+        if counter % 100 == 0:
+            print(f'{counter} / {len(valid_columns)} | {round((len(valid_columns) - counter) * ((time.perf_counter() - t_start) / counter), 1)} seconds left')
         counter += 1
         # Subset data
         tmp_geom = {i: geometry[i][reach].to_numpy() for i in geometry}
@@ -117,6 +120,13 @@ def batch_add_bathymetry(meta_path):
         slope = tmp_meta['slope']
         length = tmp_meta['length']
         da = tmp_meta['TotDASqKm']
+
+        # handle waterbodies
+        if tmp_meta['wbody']:
+            for i in out_dfs:
+                out_dfs[i][reach] = tmp_geom[i]
+                out_dfs[i] = out_dfs[i].copy()
+            continue
 
         # Convert 3D to 2D perspective
         tmp_geom['area'] = tmp_geom['area'] / length
@@ -247,6 +257,7 @@ def map_edzs(meta_path):
 
     # Load EDZ data
     feature_data = pd.read_csv(run_dict['analysis_path'])
+    feature_data[run_dict['id_field']] = feature_data[run_dict['id_field']].astype(str)
 
     # Load reaches/basins to run
     reaches = gpd.read_file(run_dict['reach_path'], ignore_geometry=True)
@@ -270,13 +281,13 @@ def map_edzs(meta_path):
             reachesin_subunit = reaches_in_unit[reaches_in_unit[run_dict["subunit_field"]] == subunit]
             reach_list = reachesin_subunit[run_dict["id_field"]].unique()
 
-            reaches_in_subunit = feature_data[feature_data['ReachCode'].isin(reach_list)]
+            reaches_in_subunit = feature_data[feature_data[run_dict["id_field"]].isin(reach_list)]
             reach_data = reaches_in_subunit[['el_edap', 'el_edep']].copy()
             if len(reaches_in_subunit) == 0:
                 continue
             reach_data['el_edap'] = reach_data['el_edap'] - reaches_in_subunit['el_bathymetry']
             reach_data['el_edep'] = reach_data['el_edep'] - reaches_in_subunit['el_bathymetry']
-            reach_data[run_dict["id_field"]] = reaches_in_subunit['ReachCode']
+            reach_data[run_dict["id_field"]] = reaches_in_subunit[run_dict["id_field"]]
 
             out_raster_path = map_edz(hand_path, run_dict["reach_path"], run_dict["id_field"], reach_data)
 
@@ -311,7 +322,7 @@ def make_run_template(base_directory='/path/to/data', run_id='1'):
         "geometry_directory": os.path.join(base_directory, 'runs', run_id, 'geometry'),
         "geometry_diagnostics": os.path.join(base_directory, 'runs', run_id, 'geometry', 'diagnostics'),
 
-        "id_field": "MergeCode",
+        "id_field": "UVM_ID",
         "unit_field": "8_name",
         "subunit_field": "12_code",
         "fields_of_interest": ['area', 'el', 'p', 'rh', 'rh_prime', 'vol'],
@@ -334,9 +345,9 @@ def make_run_template(base_directory='/path/to/data', run_id='1'):
         json.dump(run_metadata, f)
 
 if __name__ == '__main__':
-    # make_run_template(r'/netfiles/ciroh/floodplainsData', 'hydrofabric')
-    meta_path = r'/netfiles/ciroh/floodplainsData/runs/hydrofabric/run_metadata.json'
-    # topographic_signatures(meta_path)
+    # make_run_template(r'/netfiles/ciroh/floodplainsData', 'devcon')
+    meta_path = sys.argv[1]
+    topographic_signatures(meta_path)
     # batch_add_bathymetry(meta_path)
     batch_add_celerity(meta_path)
     # map_edzs(meta_path)
