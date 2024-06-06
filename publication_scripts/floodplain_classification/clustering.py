@@ -31,18 +31,16 @@ clusterer.cluster('A', 'kmedoids', n_clusters=n)
 
 # Reformatting and cleaning
 rename_dict = {
-    'el_edap_scaled': 'EDAP Stage',
-    'el_edep_scaled': 'EDEP Stage',
-    'height_scaled': 'Height',
-    'w_edep': 'EDEP Width',
-    'w_edep_scaled': 'EDEP Width Scaled',
-    'w_edap': 'EDAP Width',
-    'valley_confinement': 'Unconfinedness',
-    'vol': 'EDZ Size',
-    'min_rhp': 'Min RHP',
+    'el_edap_scaled': 'EDZ Access Stage',
+    'el_edep_scaled': 'EDZ Exit Stage',
+    'height_scaled': 'EDZ Stage Range',
+    'w_edep': 'EDZ Width',
+    'valley_confinement': 'EDZ Relative Width',
+    'vol': 'Diagnostic Size',
+    'min_rhp': 'Max Lateral Expansion',
     'slope': 'Slope',
-    'DASqKm': 'Drainage Area (sqkm)',
-    'regression_valley_confinement': 'Valley Confinement (Regression)',
+    'DASqKm': 'Drainage Area',
+    'regression_valley_confinement': 'Valley Confinement',
     'streamorder': 'Stream Order',
     'celerity_detrended': 'Shape Celerity (m^(2/3))',
     'celerity': 'Celerity (m/s)'
@@ -64,8 +62,8 @@ clusterer.colors = ["#8f00cc", "#cc0000", "#cc7000", "#cdbc00", "#07cc00", "#00c
 
 # Plotting
 clusterer.plot_summary()
-clusterer.plot_feature_boxplots()
-clusterer.plot_boxplots_general(['Drainage Area (sqkm)', 'Valley Confinement (Regression)', 'Stream Order', 'Slope', 'EDAP Width'])
+clusterer.plot_feature_boxplots(transformed=False)
+clusterer.plot_boxplots_general(['Drainage Area', 'Valley Confinement', 'Stream Order', 'Slope'])
 clusterer.plot_routing()
 clusterer.save_clusters()
 clusterer.save_all_data()

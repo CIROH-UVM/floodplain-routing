@@ -344,8 +344,11 @@ class FpClusterer(ClusterCollection):
             sns.histplot(x=c, data=transformed_df, ax=axs[1])
             fig.savefig(os.path.join(out_dir, f'{c}_hist.png'), dpi=300)
 
-    def plot_feature_boxplots(self):
-        transformed_df = pd.DataFrame(self.trans_features, columns=self.feature_cols)
+    def plot_feature_boxplots(self, transformed=True):
+        if transformed:
+            transformed_df = pd.DataFrame(self.trans_features, columns=self.feature_cols)
+        else:
+            transformed_df = self.features[self.feature_cols]
         transformed_df['cluster'] = self.clusters['cluster'].to_numpy()
         ord = sorted(transformed_df['cluster'].unique())
         for col in self.feature_cols:
@@ -358,7 +361,7 @@ class FpClusterer(ClusterCollection):
         cols = 3
         rows = np.ceil(len(self.feature_cols) / cols).astype(int)
         
-        fig, axs = plt.subplots(ncols=cols, nrows=rows, figsize=(13, 9), sharey=True, sharex=True)
+        fig, axs = plt.subplots(ncols=cols, nrows=rows, figsize=(13, 9), sharey=transformed, sharex=True)
         if self.norm_type == 'standard':
             ylims = (-3.25, 3.25)
             yticks = np.arange(-3, 3, 1)
@@ -375,7 +378,9 @@ class FpClusterer(ClusterCollection):
         for i, ax in enumerate(ax_list):
             c = self.feature_cols[i]
             sns.boxplot(x='cluster', y=c, data=transformed_df, ax=ax, palette=self.cpal, order=ord, showfliers=False)
-            ax.set(xlabel=None, ylabel=None, title=c, facecolor='#f5f5f5', ylim=ylims, yticks=yticks)
+            ax.set(xlabel=None, ylabel=None, title=c, facecolor='#f5f5f5')
+            if transformed:
+                ax.set(ylim=ylims, yticks=yticks)
         
         fig.tight_layout()
         # fig.savefig(os.path.join(self.out_dir, 'feature_boxplots.png'), dpi=300)

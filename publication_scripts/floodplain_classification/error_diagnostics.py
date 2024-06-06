@@ -102,4 +102,11 @@ for c in cluster_labels:
     print(f'negative attenuation error count: {att_error} | percent: {round((att_error / len(cluster_reaches)) * 100, 2)} | Average value of {round(errs.mean() * 100, 2)}% | median value of {round(errs.median() * 100, 2)}%')
     print(BREAK_STRING)
 
+for m in magnitudes:
+    d = 'Medium'
+    col = f'{m}_{d}_pct_attenuation'
+    negatives = (results[col] < 0).sum()
+    print(f'{m}_{d} negative attenuation count: {negatives}  | percent: {round((negatives / len(results)) * 100, 2)}')
+print(BREAK_STRING)
+
 
