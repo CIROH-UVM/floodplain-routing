@@ -1,0 +1,19 @@
+name: floodplains
+channels:
+  - conda-forge
+dependencies:
+  - geopandas
+  - gdal
+  - rasterio
+  - matplotlib
+  - ca-certificates
+  - certifi
+  - openssl
+  - scikit-learn-extra
+  - seaborn
+  - statsmodels
+  - conda-forge::tslearn
+  - conda-forge::pyarrow
+  - umap-learn
+  - conda-forge::boto3
+prefix: /data/condaEnvs/floodplains
