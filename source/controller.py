@@ -39,6 +39,12 @@ def topographic_signatures(meta_path):
             print(f'subunit {counter}: {subunit}')
             counter += 1
 
+            reachesin_subunit = reaches_in_unit[reaches_in_unit[run_dict["subunit_field"]] == subunit]
+            reachesin_subunit = reachesin_subunit.groupby(reachesin_subunit[run_dict['id_field']]).agg(TotDASqKm=('TotDASqKm', 'max'), length=('length', 'sum'))
+            reach_list = reachesin_subunit.index.to_list()
+            reachesin_subunit['max_stage'] = reachesin_subunit['TotDASqKm'].apply(max_stage_equation)
+            stages = np.array([np.linspace(0, max_stage_equation(dasqkm), 1000) for dasqkm in reachesin_subunit['TotDASqKm'].to_list()])
+
             if run_dict['geometry_source'] == 'HAND':
                 hand_path = os.path.join(run_dict['data_directory'], unit, 'subbasins', subunit, 'rasters', 'HAND.tif')
                 slope_path = os.path.join(run_dict['data_directory'], unit, 'subbasins', subunit, 'rasters', 'slope.tif')
@@ -46,20 +52,19 @@ def topographic_signatures(meta_path):
                     print(f'No data for {subunit} found')
                     continue
 
-                reachesin_subunit = reaches_in_unit[reaches_in_unit[run_dict["subunit_field"]] == subunit]
-                reachesin_subunit = reachesin_subunit.groupby(reachesin_subunit[run_dict['id_field']]).agg(TotDASqKm=('TotDASqKm', 'max'))
-                reach_list = reachesin_subunit.index.to_list()
-                reachesin_subunit['max_stage'] = reachesin_subunit['TotDASqKm'].apply(max_stage_equation)
-                stages = np.array([np.linspace(0, max_stage_equation(dasqkm), 1000) for dasqkm in reachesin_subunit['TotDASqKm'].to_list()])
+                su_data_dict = subunit_hydraulics(hand_path, run_dict['reach_path'], slope_path, stages, reach_field=run_dict['id_field'], reaches=reach_list, fields_of_interest=run_dict['fields_of_interest'], el_type='hand')
+            elif run_dict['geometry_source'] == 'DEM':
+                dem_path = os.path.join(run_dict['data_directory'], unit, 'subbasins', subunit, 'rasters', 'DEM.tif')
+                slope_path = os.path.join(run_dict['data_directory'], unit, 'subbasins', subunit, 'rasters', 'slope.tif')
+                if not (os.path.exists(hand_path) and os.path.exists(slope_path)):
+                    print(f'No data for {subunit} found')
+                    continue
 
-                su_data_dict = subunit_hydraulics(hand_path, run_dict['reach_path'], slope_path, stages, reach_field=run_dict['id_field'], reaches=reach_list, fields_of_interest=run_dict['fields_of_interest'])
+                su_data_dict = subunit_hydraulics(dem_path, run_dict['reach_path'], slope_path, stages, reach_field=run_dict['id_field'], reaches=reach_list, fields_of_interest=run_dict['fields_of_interest'], el_type='dem')
             elif run_dict['geometry_source'] == 'NWM':
-                reachesin_subunit = reaches_in_unit[reaches_in_unit[run_dict["subunit_field"]] == subunit]
-                reachesin_subunit = reachesin_subunit.groupby(reachesin_subunit[run_dict['id_field']]).agg(TotDASqKm=('TotDASqKm', 'max'), length=('length', 'sum'))
-                reach_list = reachesin_subunit.index.to_list()
                 length_list = reachesin_subunit['length'].values
                 da_list = reachesin_subunit['TotDASqKm'].values
-                stages = np.array([np.linspace(0, max_stage_equation(dasqkm), 1000) for dasqkm in reachesin_subunit['TotDASqKm'].to_list()])
+
                 su_data_dict = nwm_subunit(das=da_list, stages=stages, lengths=length_list, reaches=reach_list, fields_of_interest=run_dict['fields_of_interest'])
 
             for f in run_dict['fields_of_interest']:

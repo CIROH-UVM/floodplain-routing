@@ -103,6 +103,7 @@ def reach_hydraulics(r, thiessens, elevations, slope, el_nd, resolution, bins):
     mask = np.logical_and(mask, elevations != el_nd)  # Select cells with valid HAND elevation
     mask = np.logical_and(mask, elevations < bins.max())  # Select cells with HAND elevation within range of interest
     tmp_elevations = elevations[mask]
+    tmp_elevations = tmp_elevations - tmp_elevations.min()
     tmp_slope = np.arctan(slope[mask])
     projected_area = (resolution ** 2) / np.cos(tmp_slope)  # Wetted perimeter
     depth_change = bins[1] - bins[0]
@@ -172,7 +173,7 @@ def nwm_geometry(da, stages):
     return wrk_df
 
 
-def subunit_hydraulics(hand_path, aoi_path, slope_path, stages, reach_field=None, reaches=None, fields_of_interest=None):
+def subunit_hydraulics(hand_path, aoi_path, slope_path, stages, reach_field=None, reaches=None, fields_of_interest=None, el_type='hand'):
     elevations = load_raster(hand_path)
     slope = load_raster(slope_path)
     if aoi_path[-3:] == 'tif':
@@ -188,7 +189,7 @@ def subunit_hydraulics(hand_path, aoi_path, slope_path, stages, reach_field=None
     t1 = time.perf_counter()
     for r, s in zip(reaches, stages):
         print(f'{counter} / {len(reaches)}', end="\r")
-        wrk_df = reach_hydraulics(r, thiessens['data'], elevations['data'], slope['data'], elevations['nd_value'], resolution, s)
+        wrk_df = reach_hydraulics(r, thiessens['data'], elevations['data'], slope['data'], elevations['nd_value'], resolution, s, el_type=el_type)
 
         for k in data_dict:
             # data_dict[k] = pd.concat((data_dict[k], wrk_df[k].rename(r)), axis=1, ignore_index=True)
