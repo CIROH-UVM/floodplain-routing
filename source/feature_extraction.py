@@ -73,7 +73,7 @@ class ReachPlot:
             self.rhp_ax.fill_betweenx(self.el[start:stop], 0.5, self.rhp[start:stop])
 
     def add_aeps(self, q):
-       for reg in REGRESSIONS['peak_flowrate']:
+        for reg in REGRESSIONS['peak_flowrate']:
             params = REGRESSIONS['peak_flowrate'][reg]
             q_ri = (params[0] * ((self.da / 2.59) ** params[1])) / 35.3147
             norm_stage = np.interp(q_ri, q, self.el)
@@ -84,6 +84,7 @@ class ReachPlot:
             self.rh_ax.text(min(self.rh), norm_stage, reg, horizontalalignment='left', verticalalignment='bottom', fontsize='xx-small')
             self.rhp_ax.axhline(norm_stage, c='c', alpha=0.3, ls='dashed')
             self.rhp_ax.text(-1, norm_stage, reg, horizontalalignment='left', verticalalignment='bottom', fontsize='xx-small')
+
 
     def add_spline_rh(self, spl_dict):
         self.rh_ax.plot(spl_dict['rh_appr'], spl_dict['el_scaled'], c='darkorange', lw=1, alpha=0.7, zorder=4)
@@ -282,7 +283,8 @@ def extract_features(run_path, plot=False, subset=None):
     volume_path = os.path.join(working_dir, 'vol.csv')
 
     reach_data = pd.read_csv(reach_path)
-    reach_data = reach_data.dropna(axis=0)
+    # reach_data = reach_data.drop(columns=['_wbody', '_max_Slope'])
+    # reach_data = reach_data.dropna(axis=0)
     reach_data[run_dict['id_field']] = reach_data[run_dict['id_field']].astype(np.int64).astype(str)
     reach_data = reach_data.set_index(run_dict['id_field'])
 
@@ -335,6 +337,11 @@ def extract_features(run_path, plot=False, subset=None):
             features.loc[reach, 'invalid_geometry'] = 1
             continue
 
+        features.loc[reach, 'length'] = tmp_meta['length']
+        features.loc[reach, 'slope'] = tmp_meta['slope']
+        features.loc[reach, 'DASqKm'] = tmp_meta['TotDASqKm']
+        features.loc[reach, 'wbody'] = tmp_meta['wbody']
+
         if plot:
             slope = tmp_meta['slope']
             da = tmp_meta['TotDASqKm']
@@ -373,15 +380,12 @@ def extract_features(run_path, plot=False, subset=None):
         stdev = np.nanstd(tmp_rh_prime)
         ave_rh = np.nanmean(tmp_rh)
 
-        features.loc[reach, 'length'] = tmp_meta['length']
-        features.loc[reach, 'slope'] = tmp_meta['slope']
-        features.loc[reach, 'DASqKm'] = tmp_meta['TotDASqKm']
-        features.loc[reach, 'wbody'] = tmp_meta['wbody']
         features.loc[reach, 'ave_rhp'] = ave
         features.loc[reach, 'stdev_rhp'] = stdev
         features.loc[reach, 'Ave_Rh'] = ave_rh
         features.loc[reach, 'regression_valley_confinement'] = regression_valley_confinement
         features.loc[reach, 'streamorder'] = tmp_meta['s_order']
+        features.loc[reach, 'q500_w'] = q500_w
         features.loc[reach, 'invalid_geometry'] = 0
         if edz_count == 0:
             features.loc[reach, 'cumulative_volume'] = 0
@@ -460,4 +464,4 @@ def extract_features(run_path, plot=False, subset=None):
 if __name__ == '__main__':
     run_path = sys.argv[1]
     subset = ['60000200039195']
-    extract_features(run_path, plot=True, subset=None)
+    extract_features(run_path, plot=False, subset=None)

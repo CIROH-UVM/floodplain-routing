@@ -270,8 +270,46 @@ class FpClusterer(ClusterCollection):
                 ax[i].plot(rh_prime, y_space, c=c, alpha=0.1)
             
             # Formatting and labelling
-            ax[i].set(title=f'n={len(self.features[mask])}', xlabel=r"${R}_{h}$'", xlim=(-3, 1), yticks=[], facecolor='#f5f5f5')
-        ax[0].set(ylabel='Stage (x bkf)', yticks=range(7))
+            fs = 16
+            ax[i].set_title(f'n={len(self.features[mask])}', fontsize=fs)
+            ax[i].set_xlim(-3.1, 1.1)
+            ax[i].set_xticks([-3, 0, 1])
+            if i == 0:
+                ax[i].set_yticks(range(0, 7))
+                ax[i].set_ylabel(r'Normalized Stage (ns) (m ${m}^{-1}$)', fontsize=fs)
+            else:
+                ax[i].set_yticks([])
+            ax[i].set_xticklabels(ax[i].get_xticklabels(), fontsize=fs)
+            ax[i].set_yticklabels(ax[i].get_yticklabels(), fontsize=fs)
+            ax[i].set_xlabel(r"${R}_{h}$'", fontsize=fs)
+            ax[i].set_facecolor('#f5f5f5')
+
+        return ax
+    
+    def _plot_rhp_medoid(self, ax):
+        clusters = self.clusters['cluster'].unique()        
+        clusters = clusters[clusters != 'W']
+        clusters = clusters[clusters != 'X']
+        n = len(clusters)
+        ord = sorted(clusters)
+        y_space = np.linspace(0, 6, self.rh_prime_data.shape[0])
+
+        for i in range(n):
+            r = self.medoid_dict[ord[i]]
+            if r is None:
+                continue
+            rh_prime = self.rh_prime_data[r].values
+            ax[i].plot(rh_prime, y_space, c='k', alpha=1, zorder=100)
+
+            edap = self.features.loc[r, 'EDZ Access Stage']
+            edap_x = np.interp(edap, y_space, rh_prime)
+            edep = self.features.loc[r, 'EDZ Exit Stage']
+            edep_x = np.interp(edep, y_space, rh_prime)
+            rhp_min_el = self.features.loc[r, 'el_min_scaled']
+            rhp_min_x = np.interp(rhp_min_el, y_space, rh_prime)
+            x_pts = [edap_x, edep_x, rhp_min_x]
+            y_pts = [edap, edep, rhp_min_el]
+            ax[i].scatter(x_pts, y_pts, c='k', s=20, zorder=100)
         return ax
     
     def _plot_sec(self, ax):
@@ -282,6 +320,7 @@ class FpClusterer(ClusterCollection):
         stage_space = np.append(stage_space[::-1], stage_space)
 
         max_w = 400
+        x_space = [0, max_w * 2]
         new_ws = dict()
         for r in self.features.iterrows():
             length = r[1]['length']
@@ -300,11 +339,27 @@ class FpClusterer(ClusterCollection):
                 widths = widths + max_w
                 c = self.cpal[ord[i]]
                 ax[i].plot(widths, stage_space, c=c, alpha=0.1)
-            ax[i].set(xlim=(0, max_w * 2), xlabel='Top-width (m)', xticks=[0, max_w * 2], yticks=[], facecolor='#f5f5f5')
+
+            # Formatting and labelling
+            fs = 16
+            ax[i].set_xlim(0, max_w * 2)
+            ax[i].set_xticks(x_space)
+            ax[i].set_ylim(0, 4)
+            if i == 0:
+                ax[i].set_yticks(range(5))
+                ax[i].set_ylabel(r'ns (m ${m}^{-1}$)', fontsize=fs)
+            else:
+                ax[i].set_yticks([])
+            ax[i].set_xticklabels(ax[i].get_xticklabels(), fontsize=fs)
+            ax[i].set_yticklabels(ax[i].get_yticklabels(), fontsize=fs)
+            ax[i].set_xlabel('Top-width (m)', fontsize=fs)
+            ax[i].set_facecolor('#f5f5f5')
         return ax
 
     def _plot_sec_medoid(self, ax):
         clusters = self.clusters['cluster'].unique()
+        clusters = clusters[clusters != 'W']
+        clusters = clusters[clusters != 'X']
         n = len(clusters)
         ord = sorted(clusters)
         stage_space = np.linspace(0, 6, self.width_data.shape[0])
@@ -324,14 +379,20 @@ class FpClusterer(ClusterCollection):
         max_s = 4
         for i in range(n):
             r = self.medoid_dict[ord[i]]
-            ax[i].set(xlim=(0, max_w * 2), xlabel='Top-width (m)', xticks=[0, max_w * 2], yticks=[], facecolor='#f5f5f5')
             if r is None:
                 continue
             widths = new_ws[r]
             widths = widths + max_w
             ax[i].plot(widths, stage_space, c='k', alpha=1)
-            ax[i].set_ylim(0, max_s)
-        ax[0].set(ylabel='Stage (x bkf)', yticks=range(7), ylim=(0, max_s))
+
+            length = self.features.loc[r, 'length']
+            edap_w = (self.features.loc[r, 'w_edap'] / 2)
+            edap_y = self.features.loc[r, 'EDZ Access Stage']
+            edep_w = (self.features.loc[r, 'EDZ Width'] / 2)
+            edep_y = self.features.loc[r, 'EDZ Exit Stage']
+            x_vals = (max_w-edep_w, max_w-edap_w, max_w+edap_w, max_w+edep_w)
+            y_vals = (edep_y, edap_y, edap_y, edep_y)
+            ax[i].scatter(x_vals, y_vals, c='k', s=15, zorder=100, alpha=0.8)
         return ax
 
     def plot_features(self):
@@ -418,14 +479,16 @@ class FpClusterer(ClusterCollection):
             
         rhp_axs = axs[0, :]
         rhp_axs = self._plot_rhp(rhp_axs)
+        rhp_axs = self._plot_rhp_medoid(rhp_axs)
 
         w_axs = axs[1, :]
         w_axs = self._plot_sec(w_axs)
         w_axs = self._plot_sec_medoid(w_axs)
     
         fig.tight_layout()
-        # fig.savefig(os.path.join(self.out_dir, 'cluster_summary.png'), dpi=300)
+        fig.savefig(os.path.join(self.out_dir, 'cluster_summary.png'), dpi=300)
         fig.savefig(os.path.join(self.out_dir, 'cluster_summary.pdf'), dpi=300)
+        fig.savefig(os.path.join(self.out_dir, 'cluster_summary.eps'), dpi=300, format='eps')
 
     def plot_routing(self):
         ord = sorted(self.clusters['cluster'].unique())
