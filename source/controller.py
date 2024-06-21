@@ -20,7 +20,8 @@ def topographic_signatures(meta_path):
         max_stage_equation = lambda da: 10
 
     # Load reaches/basins to run
-    reaches = pd.read_csv(run_dict['reach_meta_path'], dtype={'12_code': str, run_dict['id_field']: str})
+    reaches = pd.read_csv(run_dict['reach_meta_path'], dtype={'12_code': str, run_dict['id_field']: int})
+    reaches[run_dict['id_field']] = reaches[run_dict['id_field']].astype(str)
     units = reaches[run_dict['unit_field']].unique()
 
     # Initialize logging
@@ -345,10 +346,10 @@ def make_run_template(base_directory='/path/to/data', run_id='1'):
         json.dump(run_metadata, f)
 
 if __name__ == '__main__':
-    # make_run_template(r'/netfiles/ciroh/floodplainsData', 'devcon')
+    # make_run_template(r'/netfiles/ciroh/floodplainsData', 'NWM')
     meta_path = sys.argv[1]
     topographic_signatures(meta_path)
-    # batch_add_bathymetry(meta_path)
+    batch_add_bathymetry(meta_path)
     batch_add_celerity(meta_path)
     # map_edzs(meta_path)
 
