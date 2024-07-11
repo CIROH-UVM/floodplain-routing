@@ -98,14 +98,14 @@ def gage_areas_from_poly_gdal(shp_path, id_field, dem_filter, save_path=None, re
     return thiessen
 
 
-def reach_hydraulics(r, thiessens, elevations, slope, el_nd, resolution, bins):
+def reach_hydraulics(r, thiessens, elevations, slope, el_nd, resolution, bins, el_type='hand'):
     mask = thiessens == int(r)  # Select cells within reach area of interest
     mask = np.logical_and(mask, elevations != el_nd)  # Select cells with valid HAND elevation
     mask = np.logical_and(mask, elevations < bins.max())  # Select cells with HAND elevation within range of interest
     tmp_elevations = elevations[mask]
     tmp_elevations = tmp_elevations - tmp_elevations.min()
     tmp_slope = np.arctan(slope[mask])
-    projected_area = (resolution ** 2) / np.cos(tmp_slope)  # Wetted perimeter
+    projected_area = resolution / np.cos(tmp_slope)  # Wetted perimeter
     depth_change = bins[1] - bins[0]
     
     wrk_df = pd.DataFrame({'el': tmp_elevations, 'p': projected_area})
@@ -116,8 +116,8 @@ def reach_hydraulics(r, thiessens, elevations, slope, el_nd, resolution, bins):
     
     wrk_df['el'] = (bins[:-1] + bins[1:]) / 2
     
-    wrk_df['area'] = wrk_df['count'].cumsum()
-    wrk_df['area'] -= (wrk_df['count'] * 0.5)  # Center
+    wrk_df['area'] = wrk_df['count'].cumsum() * resolution
+    wrk_df['area'] -= (wrk_df['count'] * 0.5 * resolution)  # Center
     tmp_p = wrk_df['p'].cumsum()
     tmp_p -= (wrk_df['p'] * 0.5)  # Center
     wrk_df['p'] = tmp_p
@@ -181,7 +181,7 @@ def subunit_hydraulics(hand_path, aoi_path, slope_path, stages, reach_field=None
     elif aoi_path[-3:] == 'shp':
         thiessens = gage_areas_from_poly_gdal(aoi_path, reach_field, elevations, reaches=reaches)
 
-    resolution = elevations['pixel_width'] * elevations['pixel_height']
+    resolution = abs(elevations['pixel_width'] * elevations['pixel_height'])
 
     data_dict = {k: pd.DataFrame() for k in fields_of_interest}
 
