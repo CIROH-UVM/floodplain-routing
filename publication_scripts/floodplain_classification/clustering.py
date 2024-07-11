@@ -62,19 +62,19 @@ clusterer.colors = ["#8f00cc", "#cc0000", "#cc7000", "#cdbc00", "#07cc00", "#00c
 magnitudes = ['Q2', 'Q10', 'Q50', 'Q100']
 lables = ['50% AEP', '10% AEP', '2% AEP', '1% AEP']
 
-cms_label = 'Attenuation Per Km (cms)'
-value_cols = [f'{m}_Medium_cms_attenuation_per_km' for m in magnitudes]
-for c in value_cols:
-    clusterer.features[c] = 0
-value_cols = [f'{m}_Medium_pct_attenuation_per_km' for m in magnitudes]
-for c in value_cols:
-    clusterer.features[c] = 0
+# cms_label = 'Attenuation Per Km (cms)'
+# value_cols = [f'{m}_Medium_cms_attenuation_per_km' for m in magnitudes]
+# for c in value_cols:
+#     clusterer.features[c] = 0
+# value_cols = [f'{m}_Medium_pct_attenuation_per_km' for m in magnitudes]
+# for c in value_cols:
+#     clusterer.features[c] = 0
 
 
 # Plotting
-# clusterer.plot_summary()
-# clusterer.plot_feature_boxplots(transformed=False)
+# clusterer.plot_summary(fake_medoids=True)
+clusterer.plot_feature_boxplots(transformed=False)
 # clusterer.plot_boxplots_general(['Drainage Area', 'Valley Confinement', 'Slope'])
 # clusterer.plot_routing()
 # clusterer.save_clusters()
-clusterer.save_all_data()
+# clusterer.save_all_data()
