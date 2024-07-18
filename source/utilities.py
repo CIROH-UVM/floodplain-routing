@@ -101,7 +101,11 @@ def gage_areas_from_poly_gdal(shp_path, id_field, dem_filter, save_path=None, re
 def reach_hydraulics(r, thiessens, elevations, slope, el_nd, resolution, bins, el_type='hand'):
     mask = thiessens == int(r)  # Select cells within reach area of interest
     mask = np.logical_and(mask, elevations != el_nd)  # Select cells with valid HAND elevation
-    mask = np.logical_and(mask, elevations < bins.max())  # Select cells with HAND elevation within range of interest
+    if el_type == 'dem':
+        tmp_elevations = elevations - elevations[mask].min()
+    else:
+        tmp_elevations = elevations
+    mask = np.logical_and(mask, tmp_elevations < bins.max())  # Select cells with HAND elevation within range of interest
     tmp_elevations = elevations[mask]
     tmp_elevations = tmp_elevations - tmp_elevations.min()
     tmp_slope = np.arctan(slope[mask])
