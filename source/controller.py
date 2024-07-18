@@ -8,7 +8,7 @@ import json
 from utilities import subunit_hydraulics, add_bathymetry, nwm_subunit, calc_celerity
 
 
-def topographic_signatures(meta_path):
+def extract_geometry(meta_path):
     # Load run config
     with open(meta_path, 'r') as f:
         run_dict = json.loads(f.read())
@@ -85,8 +85,7 @@ def topographic_signatures(meta_path):
     data_dict['el_scaled'].to_csv(os.path.join(run_dict['geometry_directory'], 'el_scaled.csv'), index=False)
     print('Finished saving')
 
-
-def batch_add_bathymetry(meta_path):
+def add_bathymetry(meta_path):
     # Load run config
     with open(meta_path, 'r') as f:
         run_dict = json.load(f)
@@ -173,7 +172,7 @@ def batch_add_bathymetry(meta_path):
     with open(meta_path, 'w') as f:
         json.dump(run_dict, f)
 
-def batch_add_celerity(meta_path):
+def calc_celerity(meta_path):
     # Load run config
     with open(meta_path, 'r') as f:
         run_dict = json.load(f)
@@ -282,9 +281,6 @@ def make_run_template(base_directory='/path/to/data', run_id='1'):
 if __name__ == '__main__':
     # make_run_template(r'/netfiles/ciroh/floodplainsData', 'NWM')
     meta_path = sys.argv[1]
-    topographic_signatures(meta_path)
-    batch_add_bathymetry(meta_path)
-    batch_add_celerity(meta_path)
-    # map_edzs(meta_path)
-
-    # batch_geomorphons(r'/netfiles/ciroh/floodplainsData')
+    extract_geometry(meta_path)
+    add_bathymetry(meta_path)
+    calc_celerity(meta_path)
