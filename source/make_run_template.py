@@ -45,7 +45,7 @@ def make_run_template(base_directory='/path/to/data', run_id='1'):
         os.makedirs(run_metadata[key], exist_ok=True)
     meta_path = os.path.join(run_metadata['run_directory'], 'run_metadata.json')
     with open(meta_path, 'w') as f:
-        json.dump(run_metadata, f)
+        json.dump(run_metadata, f, indent=4)
 
 
 if __name__ == '__main__':
