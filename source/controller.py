@@ -84,7 +84,7 @@ def extract_geometry(meta_path):
     data_dict['el_scaled'].to_csv(os.path.join(run_dict['geometry_directory'], 'el_scaled.csv'), index=False)
     print('Finished saving')
 
-def add_bathymetry(meta_path):
+def batch_add_bathymetry(meta_path):
     # Load run config
     with open(meta_path, 'r') as f:
         run_dict = json.load(f)
@@ -171,7 +171,7 @@ def add_bathymetry(meta_path):
     with open(meta_path, 'w') as f:
         json.dump(run_dict, f)
 
-def calc_celerity(meta_path):
+def batch_calc_celerity(meta_path):
     # Load run config
     with open(meta_path, 'r') as f:
         run_dict = json.load(f)
@@ -236,5 +236,5 @@ def scale_stages(reach_data, el_data):
 if __name__ == '__main__':
     meta_path = sys.argv[1]
     extract_geometry(meta_path)
-    add_bathymetry(meta_path)
-    calc_celerity(meta_path)
+    batch_add_bathymetry(meta_path)
+    batch_calc_celerity(meta_path)
