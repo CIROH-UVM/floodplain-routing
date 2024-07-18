@@ -8,7 +8,6 @@ import matplotlib.pyplot as plt
 from osgeo import gdal, ogr
 from rasterio import features
 from scipy.ndimage import gaussian_filter1d
-# from whitebox import WhiteboxTools
 gdal.UseExceptions()
 
 
