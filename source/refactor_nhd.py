@@ -307,5 +307,5 @@ def run_all(meta_path):
 
 
 if __name__ == '__main__':
-    meta_path = r'/netfiles/ciroh/floodplainsData/runs/8/run_metadata.json'
+    meta_path = sys.argv[1]
     run_all(meta_path)
