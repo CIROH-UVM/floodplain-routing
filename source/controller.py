@@ -5,7 +5,7 @@ import pandas as pd
 import geopandas as gpd
 import numpy as np
 import json
-from utilities import subunit_hydraulics, generate_geomorphons, add_bathymetry, reclass_geomorphons_channel, nwm_subunit, calc_celerity
+from utilities import subunit_hydraulics, add_bathymetry, nwm_subunit, calc_celerity
 
 
 def topographic_signatures(meta_path):
@@ -225,8 +225,6 @@ def batch_add_celerity(meta_path):
     out_df = pd.DataFrame(out_dict)
     out_df.to_csv(os.path.join(run_dict['geometry_directory'], 'celerity.csv'), index=False)
     
-
-
 def scale_stages(reach_data, el_data):
     el_scaled_data = el_data.copy()
     bkf_equation = lambda da: 0.26 * (da ** 0.287)
@@ -236,26 +234,6 @@ def scale_stages(reach_data, el_data):
     el_scaled_data.iloc[:, :] = (el_data.values / max_stages)
     el_scaled_data.iloc[:, 0] = el_data.iloc[:, 0]
     return el_scaled_data
-
-def batch_geomorphons(working_directory):
-    run_list = ['WIN_0504']
-    unit_dict = {'WIN': 'winooski', 'OTR': 'otter', 'LKC': 'champlain', 'MSQ': 'missisquoi'}
-    for run in run_list:
-        print(f'Running basin {run}')
-        tstart = time.perf_counter()
-        unit = unit_dict[run[:3]]
-        subunit = run[-4:]
-        raster_dir = os.path.join(working_directory, unit, 'subbasins', subunit, 'rasters')
-        # generate_geomorphons(raster_dir, working_directory)
-
-        subbasin_dir = os.path.join(working_directory, unit, 'subbasins', subunit)
-        flowlines = r'/netfiles/ciroh/floodplainsData/shared/legacy_NHD/thalwegs_nhd.shp'
-        catchments = r'/netfiles/ciroh/floodplainsData/shared/legacy_NHD/reaches.shp'
-        reclass_geomorphons_channel(subbasin_dir, flowlines, catchments)
-
-        print(f'Finished in {round((time.perf_counter() - tstart) / 60), 1} minutes')
-        print('='*25)
-
 
 def make_run_template(base_directory='/path/to/data', run_id='1'):
     run_metadata = {
