@@ -49,6 +49,6 @@ def make_run_template(base_directory='/path/to/data', run_id='1'):
 
 
 if __name__ == '__main__':
-    base_directory = sys.argv[1]
-    run_id = sys.argv[2]
+    base_directory = sys.argv[1]  # Folder of data directory
+    run_id = sys.argv[2]  # unique identifier for run 
     make_run_template(base_directory, run_id)
