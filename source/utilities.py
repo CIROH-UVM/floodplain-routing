@@ -96,7 +96,6 @@ def gage_areas_from_poly_gdal(shp_path, id_field, dem_filter, save_path=None, re
 
     return thiessen
 
-
 def reach_hydraulics(r, thiessens, elevations, slope, el_nd, resolution, bins, el_type='hand'):
     mask = thiessens == int(r)  # Select cells within reach area of interest
     mask = np.logical_and(mask, elevations != el_nd)  # Select cells with valid HAND elevation
@@ -175,7 +174,6 @@ def nwm_geometry(da, stages):
 
     return wrk_df
 
-
 def subunit_hydraulics(hand_path, aoi_path, slope_path, stages, reach_field=None, reaches=None, fields_of_interest=None, el_type='hand'):
     elevations = load_raster(hand_path)
     slope = load_raster(slope_path)
@@ -224,7 +222,6 @@ def nwm_subunit(das, reaches, stages, lengths, fields_of_interest=None):
     print('')
     print(f'Completed processing in {round(time.perf_counter() - t1, 1)} seconds')
     return data_dict
-
 
 def extract_topographic_signature(hand_path, aoi_path, slope_path, reaches=None, max_el=10, nstages=1000, show=False, save_path=None, reach_field=None):
     elevations = load_raster(hand_path)
@@ -337,7 +334,6 @@ def calc_celerity(geom, slope):
     celerity[celerity <= 0] = 0.0001
     return celerity
 
-
 def map_edz(hand_path, aoi_path, reach_field, reach_data):
     reaches = reach_data[reach_field].unique()
     elevations = load_raster(hand_path)
@@ -391,95 +387,3 @@ def merge_rasters(paths, out_path):
     gdal.Translate(out_path, tmp_path, creationOptions=['COMPRESS=LZW'])
     os.remove(tmp_path)
 
-
-def plot_rh_curve(hand_path, aoi_path, slope_path, reaches=None, max_el=10, nstages=1000, show=False, save_path=None, reach_field=None):
-    elevations = load_raster(hand_path)
-    slope = load_raster(slope_path)
-    if aoi_path[-3:] == 'tif':
-        thiessens = load_raster(aoi_path)
-    elif aoi_path[-3:] == 'shp':
-        thiessens = gage_areas_from_poly(aoi_path, reach_field, elevations)
-
-    resolution = elevations['pixel_width'] * elevations['pixel_height']
-
-    all_reaches = np.unique(thiessens['data'])
-    if reaches == None:
-        reaches = [r for r in all_reaches if r != thiessens['nd_value']]  # filter out nodata
-    else:
-        reaches = list(set(all_reaches).intersection([int(i) for i in reaches]))
-
-    for r in reaches:
-        print(r)
-        wrk_df = reach_hydraulics(r, thiessens['data'], elevations['data'], slope['data'], elevations['nd_value'], nstages, resolution, max_el)
-
-        fig, ax = plt.subplots()
-        ax.plot(wrk_df['el'], wrk_df['rh'])
-        ax.set_xlabel('Stage (m)')
-        ax.set_ylabel(r"$R_{h}$")
-        ax.set_ylim(0, 10)
-        ax.set_title(r)
-        if show:
-            plt.show()
-        if save_path:
-            tmp_path = os.path.join(save_path, f'{r}.png')
-            fig.savefig(tmp_path, dpi=300)
-        
-        plt.close(fig)
-
-
-def extract_celerity_signature(hand_path, aoi_path, slope_path, reaches=None, max_el=10, nstages=1000, show=False, save_path=None):
-    elevations, el_meta = load_raster(hand_path)
-    thiessens, thiessen_meta = load_raster(aoi_path)
-    slope, slope_meta = load_raster(slope_path)
-
-    resolution = el_meta['pixel_width'] * el_meta['pixel_height']
-
-    all_reaches = np.unique(thiessens)
-    if reaches == None:
-        reaches = [r for r in all_reaches if r != thiessen_meta['nd_value']]  # filter out nodata
-    else:
-        reaches = list(set(all_reaches).intersection([int(i) for i in reaches]))
-
-    for r in reaches:
-        print(r)
-        mask = thiessens == r
-        mask = np.logical_and(mask, elevations != el_meta['nd_value'])
-        mask = np.logical_and(mask, elevations < max_el)
-        tmp_elevations = elevations[mask]
-        tmp_slope = np.arctan(slope[mask])
-        projected_area = (resolution ** 2) / np.cos(tmp_slope)
-
-        bins = np.linspace(0, 10, nstages, endpoint=True)
-        wrk_df = pd.DataFrame({'el': tmp_elevations, 'p': projected_area})
-        wrk_df['bins'] = pd.cut(wrk_df['el'], bins=bins, labels=bins[:-1], include_lowest=True)
-        wrk_df = wrk_df.groupby(wrk_df['bins']).agg(el=('el', 'mean'),
-                                                    count=('el', 'count'),
-                                                    p=('p', 'sum'))
-        
-        wrk_df['area'] = wrk_df['count'].cumsum()
-        wrk_df['area'] -= (wrk_df['count'] * 0.5)
-        wrk_df['p'] = wrk_df['p'].cumsum()
-
-        depth_change = bins[1] - bins[0]
-        vol_increase = depth_change * wrk_df['area']
-        wrk_df['vol'] = np.cumsum(vol_increase)
-        wrk_df['rh'] = wrk_df['vol'] / wrk_df['p']
-        wrk_df['rh_prime'] = (wrk_df['rh'].shift(-1) - wrk_df['rh']) / depth_change
-
-        wrk_df['p_prime'] = (wrk_df['p'].shift(-1) - wrk_df['p']) / depth_change
-        k_prime = (5 / 3) - ((2 / 3) * (1 / wrk_df['area']) * wrk_df['rh'] * wrk_df['p_prime'])
-        wrk_df['celerity'] = k_prime * (wrk_df['rh'] ** (2 / 3))
-
-        fig, ax = plt.subplots()
-        ax.plot(wrk_df['el'], wrk_df['celerity'], label='raw')
-        ax.plot(wrk_df['el'], gaussian_filter1d(wrk_df['celerity'], 3), label='smoothed')
-        ax.set_xlabel('Stage (m)')
-        ax.set_ylabel('Kinematic Celertiy')
-        ax.set_title(r)
-        plt.legend()
-        if show:
-            plt.show()
-        if save_path:
-            tmp_path = os.path.join(save_path, f'{r}.png')
-            fig.savefig(tmp_path, dpi=300)
-        plt.close(fig)
