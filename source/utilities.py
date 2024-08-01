@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 import geopandas as gpd
 import matplotlib.pyplot as plt
-from osgeo import gdal, ogr
+from osgeo import gdal, ogr, osr
 from rasterio import features
 from scipy.ndimage import gaussian_filter1d
 gdal.UseExceptions()
@@ -101,11 +101,12 @@ def reach_hydraulics(r, thiessens, elevations, slope, el_nd, resolution, bins, e
     mask = np.logical_and(mask, elevations != el_nd)  # Select cells with valid HAND elevation
     if el_type == 'dem':
         tmp_elevations = elevations - elevations[mask].min()
+        mask = np.logical_and(mask, tmp_elevations < bins.max())  # Select cells with HAND elevation within range of interest
+        tmp_elevations = elevations[mask]
+        tmp_elevations = tmp_elevations - tmp_elevations.min()
     else:
-        tmp_elevations = elevations
-    mask = np.logical_and(mask, tmp_elevations < bins.max())  # Select cells with HAND elevation within range of interest
-    tmp_elevations = elevations[mask]
-    tmp_elevations = tmp_elevations - tmp_elevations.min()
+        mask = np.logical_and(mask, elevations < bins.max())  # Select cells with HAND elevation within range of interest
+        tmp_elevations = elevations[mask]
     tmp_slope = np.arctan(slope[mask])
     projected_area = resolution / np.cos(tmp_slope)  # Wetted perimeter
     depth_change = bins[1] - bins[0]
@@ -377,6 +378,18 @@ def map_edz(hand_path, aoi_path, reach_field, reach_data):
     outRaster.FlushCache()
     gdal.Dataset.__swig_destroy__(outRaster)
     outband = outRaster = None
+
+    poly_path = os.path.join(os.path.dirname(os.path.dirname(hand_path)), 'vectors')
+    os.makedirs(poly_path, exist_ok=True)
+    poly_path = os.path.join(poly_path, 'edz.shp')
+    # Load AOI vector
+    if len(reaches) == 1:
+        query = f"{reach_field} = '{reaches[0]}'"
+    elif len(reaches) > 1:
+        query = f"{reach_field} in {tuple(reach_data[reach_field].values)}"
+    reach_polys = gpd.read_file(aoi_path, where=query)[[reach_field, 'geometry']]
+    polygonize_raster(out_path, poly_path, reach_polys)
+
     print('')
     print(f'Completed processing in {round(time.perf_counter() - t1, 1)} seconds')
     return out_path
@@ -387,3 +400,55 @@ def merge_rasters(paths, out_path):
     gdal.Translate(out_path, tmp_path, creationOptions=['COMPRESS=LZW'])
     os.remove(tmp_path)
 
+def merge_polygons(paths, out_path):
+    print('Loading shapefiles...')
+    shp_list = list()  # could condense the next few line into list comprehension, but doing this way so progress can be printed
+    for ind, path in enumerate(paths):
+        print(f'{ind+1}/{len(paths)}', end='\r')
+        shp_list.append(gpd.read_file(path))
+    print()
+    print('Merging shapefiles...')
+    gdf = gpd.GeoDataFrame(pd.concat(shp_list, ignore_index=True))
+    gdf.to_file(out_path, driver='ESRI Shapefile')
+    print(f'EDZ shapefile saved to {out_path}')
+
+def polygonize_raster(in_path, out_path, reaches=None):
+    # Open the raster file
+    raster = gdal.Open(in_path)
+    band = raster.GetRasterBand(1)
+    crs = raster.GetProjectionRef()
+
+    # Create an output vector file
+    fname = os.path.splitext(out_path)[0]
+    driver = ogr.GetDriverByName('ESRI Shapefile')
+    if os.path.exists(out_path):
+        driver.DeleteDataSource(out_path)
+    out_datasource = driver.CreateDataSource(out_path)
+    out_layer = out_datasource.CreateLayer(fname, srs=None)
+
+    # Add a field to the output shapefile
+    new_field = ogr.FieldDefn('DN', ogr.OFTInteger)
+    out_layer.CreateField(new_field)
+
+    # Polygonize the raster
+    gdal.Polygonize(band, None, out_layer, 0, [], callback=None)
+
+    # Close datasets
+    out_datasource = None
+    raster = None
+
+    # Clean up polygon
+    gdf = gpd.read_file(out_path)
+    gdf = gdf[gdf['DN'] == 1]
+
+    if reaches is not None:
+        gdf = gpd.GeoDataFrame(gdf).set_crs(crs)
+        gdf = gdf.dissolve()
+        reaches = reaches.to_crs(crs)
+        gdf = gdf.overlay(reaches, how='intersection')
+
+    gdf = gdf.drop(columns='DN')
+
+    gdf.to_file(out_path, driver='ESRI Shapefile')
+
+    

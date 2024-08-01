@@ -5,7 +5,7 @@ import time
 import numpy as np
 import pandas as pd
 import geopandas as gpd
-from utilities import map_edz, merge_rasters
+from utilities import map_edz, merge_rasters, merge_polygons
 
 
 def map_edzs(meta_path):
@@ -23,7 +23,8 @@ def map_edzs(meta_path):
     units = reaches[run_dict['unit_field']].unique()
 
     # Process units
-    out_paths = list()
+    out_rasters = list()
+    out_polys = list()
     for unit in units:
         reaches_in_unit = reaches[reaches[run_dict["unit_field"]] == unit]
         subunits = np.sort(reaches_in_unit[run_dict['subunit_field']].unique())
@@ -47,15 +48,50 @@ def map_edzs(meta_path):
             reach_data['el_edep'] = reach_data['el_edep'] - reaches_in_subunit['el_bathymetry']
             reach_data[run_dict["id_field"]] = reaches_in_subunit[run_dict["id_field"]]
 
-            out_raster_path = map_edz(hand_path, run_dict["reach_path"], run_dict["id_field"], reach_data)
+            map_edz(hand_path, run_dict["reach_path"], run_dict["id_field"], reach_data)
 
             out_raster_path = os.path.join(os.path.dirname(hand_path), 'edz.tif')
-            out_paths.append(out_raster_path)
+            out_rasters.append(out_raster_path)
+            out_poly_path = os.path.join(os.path.dirname(os.path.dirname(hand_path)), 'edz.shp')
+            out_polys.append(out_poly_path)
         print('\n'*3)
         print(f'Completed processing {unit} in {round((time.perf_counter() - t1) / 60, 1)} minutes')
         print('='*50)
 
-    merge_rasters(out_paths, run_dict['edz_path'])
+    out_path = os.path.join(run_dict['analysis_directory'], 'edz.tif')
+    merge_rasters(out_rasters, out_path)
+    out_path = os.path.join(run_dict['analysis_directory'], 'edz.shp')
+    merge_polygons(out_polys, out_path)
+
+def merge_subbasins(meta_path):
+    # Load run config
+    with open(meta_path, 'r') as f:
+        run_dict = json.loads(f.read())
+
+    print('Finding subbasin EDZ data...')
+    # Load reaches/basins to run
+    reaches = gpd.read_file(run_dict['reach_path'], ignore_geometry=True)
+    units = reaches[run_dict['unit_field']].unique()
+
+    # Process paths
+    poly_paths = list()
+    raster_paths = list()
+    for unit in units:
+        reaches_in_unit = reaches[reaches[run_dict["unit_field"]] == unit]
+        subunits = np.sort(reaches_in_unit[run_dict['subunit_field']].unique())
+        for subunit in subunits:
+            shp_path = os.path.join(run_dict['data_directory'], unit, 'subbasins', subunit, 'vectors', 'edz.shp')
+            if os.path.exists(shp_path):
+                poly_paths.append(shp_path)
+            tif_path = os.path.join(run_dict['data_directory'], unit, 'subbasins', subunit, 'rasters', 'edz.tif')
+            if os.path.exists(tif_path):
+                raster_paths.append(tif_path)
+    
+    print('Merging EDZ data...')
+    out_path = os.path.join(run_dict['analysis_directory'], 'edz.tif')
+    merge_rasters(raster_paths, out_path)
+    out_path = os.path.join(run_dict['analysis_directory'], 'edz.shp')
+    merge_polygons(poly_paths, out_path)
 
 
 if __name__ == '__main__':
