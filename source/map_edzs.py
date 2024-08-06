@@ -5,7 +5,7 @@ import time
 import numpy as np
 import pandas as pd
 import geopandas as gpd
-from utilities import map_edz, merge_rasters, merge_polygons
+from utilities import map_edz, build_raster, merge_rasters, merge_polygons
 
 
 def map_edzs(meta_path):
@@ -63,6 +63,68 @@ def map_edzs(meta_path):
     out_path = os.path.join(run_dict['analysis_directory'], 'edz.shp')
     merge_polygons(out_polys, out_path)
 
+def map_floodplain(meta_path, magnitude):
+    # Load run config
+    with open(meta_path, 'r') as f:
+        run_dict = json.loads(f.read())
+
+    # Load flood data
+    flood_data = pd.read_csv(os.path.join(run_dict['analysis_directory'], 'flood_metrics.csv'))
+    flood_data[run_dict['id_field']] = flood_data[run_dict['id_field']].astype(str)
+    flood_data = flood_data.set_index(run_dict['id_field'])
+
+    # Load reaches/basins to run
+    reaches = gpd.read_file(run_dict['reach_path'], ignore_geometry=True)
+    reaches[run_dict['id_field']] = reaches[run_dict['id_field']].astype(str)
+    reaches = reaches.set_index(run_dict['id_field'])
+    units = reaches[run_dict['unit_field']].unique()
+
+    # Process units
+    out_rasters = list()
+    out_polys = list()
+    for unit in units:
+        reaches_in_unit = reaches[reaches[run_dict["unit_field"]] == unit]
+        subunits = np.sort(reaches_in_unit[run_dict['subunit_field']].unique())
+
+        t1 = time.perf_counter()
+        print(f'Unit: {unit} | Subunits: {len(subunits)}')
+        counter = 1
+        for subunit in subunits:
+            print(f'subunit {counter}: {subunit}')
+            counter += 1
+            hand_path = os.path.join(run_dict['data_directory'], unit, 'subbasins', subunit, 'rasters', 'HAND.tif')
+
+            reachesin_subunit = reaches_in_unit[reaches_in_unit[run_dict["subunit_field"]] == subunit]
+            reach_list = list(reachesin_subunit.index)
+
+            reaches_in_subunit = flood_data[flood_data.index.isin(reach_list)]
+            if len(reaches_in_subunit) == 0:
+                continue
+            reach_data = reaches_in_subunit[[f'{magnitude}_Medium_peak_stage']]
+            reach_dict = dict()
+            for r in reach_data.index:
+                mag_dict = {'label': magnitude, 'min_el': 0, 'max_el': reach_data.loc[r, f'{magnitude}_Medium_peak_stage']}
+                reach_dict[r] = {'ID': r, 'zones': [mag_dict]}
+            
+
+            build_raster(hand_path, run_dict["reach_path"], run_dict["id_field"], reach_dict, magnitude)
+
+            out_raster_path = os.path.join(os.path.dirname(hand_path), f'{magnitude}.tif')
+            out_rasters.append(out_raster_path)
+            out_poly_path = os.path.join(os.path.dirname(os.path.dirname(hand_path)), f'{magnitude}.shp')
+            out_polys.append(out_poly_path)
+
+        print('\n'*3)
+        print(f'Completed processing {unit} in {round((time.perf_counter() - t1) / 60, 1)} minutes')
+        print('='*50)
+
+    out_path = os.path.join(run_dict['analysis_directory'], f'{magnitude}.tif')
+    merge_rasters(out_rasters, out_path)
+    out_path = os.path.join(run_dict['analysis_directory'], f'{magnitude}.shp')
+    merge_polygons(out_polys, out_path)
+
+
+
 def merge_subbasins(meta_path, file_name):
     # Load run config
     with open(meta_path, 'r') as f:
@@ -96,4 +158,5 @@ def merge_subbasins(meta_path, file_name):
 
 if __name__ == '__main__':
     meta_path = sys.argv[1]
-    map_edzs(meta_path)
+    map_floodplain(meta_path, 'Q100')
+    # map_edzs(meta_path)
