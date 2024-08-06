@@ -63,7 +63,7 @@ def map_edzs(meta_path):
     out_path = os.path.join(run_dict['analysis_directory'], 'edz.shp')
     merge_polygons(out_polys, out_path)
 
-def merge_subbasins(meta_path):
+def merge_subbasins(meta_path, file_name):
     # Load run config
     with open(meta_path, 'r') as f:
         run_dict = json.loads(f.read())
@@ -80,17 +80,17 @@ def merge_subbasins(meta_path):
         reaches_in_unit = reaches[reaches[run_dict["unit_field"]] == unit]
         subunits = np.sort(reaches_in_unit[run_dict['subunit_field']].unique())
         for subunit in subunits:
-            shp_path = os.path.join(run_dict['data_directory'], unit, 'subbasins', subunit, 'vectors', 'edz.shp')
+            shp_path = os.path.join(run_dict['data_directory'], unit, 'subbasins', subunit, 'vectors', f'{file_name}.shp')
             if os.path.exists(shp_path):
                 poly_paths.append(shp_path)
-            tif_path = os.path.join(run_dict['data_directory'], unit, 'subbasins', subunit, 'rasters', 'edz.tif')
+            tif_path = os.path.join(run_dict['data_directory'], unit, 'subbasins', subunit, 'rasters', f'{file_name}.tif')
             if os.path.exists(tif_path):
                 raster_paths.append(tif_path)
     
     print('Merging EDZ data...')
-    out_path = os.path.join(run_dict['analysis_directory'], 'edz.tif')
+    out_path = os.path.join(run_dict['analysis_directory'], f'{file_name}.tif')
     merge_rasters(raster_paths, out_path)
-    out_path = os.path.join(run_dict['analysis_directory'], 'edz.shp')
+    out_path = os.path.join(run_dict['analysis_directory'], f'{file_name}.shp')
     merge_polygons(poly_paths, out_path)
 
 
