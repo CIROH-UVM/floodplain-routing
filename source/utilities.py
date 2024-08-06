@@ -394,6 +394,76 @@ def map_edz(hand_path, aoi_path, reach_field, reach_data):
     print(f'Completed processing in {round(time.perf_counter() - t1, 1)} seconds')
     return out_path
 
+
+def build_raster(hand_path, aoi_path, reach_field, reach_data, out_name):
+    """ A multi-purpose version of map_edz() that can be used to map any number of zones to a raster. """
+
+    reaches = list(reach_data.keys())
+    elevations = load_raster(hand_path)
+    if aoi_path[-3:] == 'tif':
+        thiessens = load_raster(aoi_path)
+    elif aoi_path[-3:] == 'shp':
+        thiessens = gage_areas_from_poly_gdal(aoi_path, reach_field, elevations, reaches=reaches)
+
+    # make an internal ID
+    zones = list()
+    for r in reaches:
+        zones.extend([i['label'] for i in reach_data[r]['zones']])
+    iids = {z: i+1 for i, z in enumerate(np.unique(zones))}
+    reverse_iids = {v: k for k, v in iids.items()}
+    
+    # initialize empty raster and go
+    out_data = np.zeros(elevations['data'].shape)
+    counter = 1
+    t1 = time.perf_counter()
+    for r in reaches:
+        print(f'{counter} / {len(reaches)}', end="\r")
+
+        reach_mask = (thiessens['data'] == int(r))
+
+        for z in reach_data[r]['zones']:
+            z_mask = np.logical_and((elevations['data'] >= z['min_el']), (elevations['data'] < z['max_el']))
+            combo_mask = np.logical_and(reach_mask, z_mask)
+            out_data[combo_mask] = iids[z['label']]
+
+        counter += 1
+
+    cols = elevations['cols']
+    rows = elevations['rows']
+    originX = elevations['origin_x']
+    originY = elevations['origin_y']
+
+    driver = gdal.GetDriverByName('GTiff')
+    out_path = os.path.join(os.path.dirname(hand_path), f'{out_name}.tif')
+    if os.path.exists(out_path):
+        os.remove(out_path)
+    if os.path.exists(out_path):
+        os.remove(out_path + '.aux.xml')
+    outRaster = driver.Create(out_path, cols, rows, 1, gdal.GDT_Byte, options=['COMPRESS=LZW'])
+    outRaster.SetGeoTransform((originX, elevations['pixel_width'], 0, originY, 0, elevations['pixel_height']))
+    outband = outRaster.GetRasterBand(1)
+    outband.WriteArray(out_data.astype(np.int8))
+    outband.SetNoDataValue(0)
+    outRaster.SetProjection(elevations['crs'])
+    outRaster.FlushCache()
+    gdal.Dataset.__swig_destroy__(outRaster)
+    outband = outRaster = None
+
+    poly_path = os.path.join(os.path.dirname(os.path.dirname(hand_path)), 'vectors')
+    os.makedirs(poly_path, exist_ok=True)
+    poly_path = os.path.join(poly_path, f'{out_name}.shp')
+    # Load AOI vector
+    if len(reaches) == 1:
+        query = f"{reach_field} = '{reaches[0]}'"
+    elif len(reaches) > 1:
+        query = f"{reach_field} in {tuple(reaches)}"
+    reach_polys = gpd.read_file(aoi_path, where=query)[[reach_field, 'geometry']]
+    polygonize_raster(out_path, poly_path, reach_polys, rename_dict=reverse_iids)
+
+    print('')
+    print(f'Completed processing in {round(time.perf_counter() - t1, 1)} seconds')
+    return out_path
+
 def merge_rasters(paths, out_path):
     tmp_path = out_path.replace('tif', 'vrt')
     gdal.BuildVRT(tmp_path, paths)
@@ -412,7 +482,7 @@ def merge_polygons(paths, out_path):
     gdf.to_file(out_path, driver='ESRI Shapefile')
     print(f'EDZ shapefile saved to {out_path}')
 
-def polygonize_raster(in_path, out_path, reaches=None):
+def polygonize_raster(in_path, out_path, reaches=None, rename_dict=None):
     # Open the raster file
     raster = gdal.Open(in_path)
     band = raster.GetRasterBand(1)
@@ -439,7 +509,9 @@ def polygonize_raster(in_path, out_path, reaches=None):
 
     # Clean up polygon
     gdf = gpd.read_file(out_path)
-    gdf = gdf[gdf['DN'] == 1]
+    gdf = gdf[gdf['DN'] != 0]
+    if rename_dict is not None:
+        gdf['zone'] = gdf['DN'].map(rename_dict)
 
     if reaches is not None:
         gdf = gpd.GeoDataFrame(gdf).set_crs(crs)
