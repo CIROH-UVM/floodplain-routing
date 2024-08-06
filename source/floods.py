@@ -4,6 +4,7 @@ import sys
 import time
 import numpy as np
 import pandas as pd
+np.seterr(divide='ignore', invalid='ignore')
 
 ### Static Data ###
 T_TP_ORDINATES = np.array([0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 2, 2.2, 2.4, 2.6, 2.8, 3, 3.2, 3.4, 3.6, 3.8, 4, 4.5, 5])
@@ -33,41 +34,44 @@ class Reach:
         self.da = da
         self.slope = slope
         self.length = length
-        self.el = el
-        self.tw = tw
-        self.p = p
-        self.area = area
-        self.radius = radius
-        self.mannings = mannings
+        self.el = el.values
+        self.tw = tw.values
+        self.p = p.values
+        self.area = area.values
+        self.radius = radius.values
+        self.mannings = mannings.values
         self.weighted_mannings = np.cumsum(mannings * p) / np.cumsum(p)
 
         self.ch_width = np.interp(edap, el, tw)
-        self.edz_width = np.interp(edep, el, tw)
-        self.ch_widths = np.repeat(self.ch_width, len(el))
-        self.ch_widths[el < edap] = tw[el < edap]
+        self.edz_width = np.interp(edep, el, tw) - self.ch_width
+        self.ch_widths = tw.values.copy()
+        self.ch_widths[el > edap] = np.repeat(self.ch_width, len(el))[el > edap]
         self.edz_widths = tw - self.ch_widths
         self.edz_widths[el > edep] = self.edz_width
         self.fp_widths = tw - (self.ch_widths + self.edz_widths)
 
         self.ch_p = np.interp(edap, el, p)
-        self.edz_p = np.interp(edep, el, p)
-        self.ch_ps = np.repeat(self.ch_p, len(el))
-        self.ch_ps[el < edap] = p[el < edap]
+        self.edz_p = np.interp(edep, el, p) - self.ch_p
+        self.ch_ps = p.values.copy()
+        self.ch_ps[el > edap] = np.repeat(self.ch_p, len(el))[el > edap]
         self.edz_ps = p - self.ch_ps
         self.edz_ps[el > edep] = self.edz_p
         self.fp_ps = p - (self.ch_ps + self.edz_ps)
 
         self.ch_area = np.interp(edap, el, area)
-        self.edz_area = np.interp(edep, el, area)
-        self.ch_areas = self.ch_area + ((el - edap) * self.ch_widths)
-        self.ch_areas[el < edap] = area[el < edap]
-        self.edz_areas = area - self.ch_areas
-        self.edz_areas[el > edep] = self.edz_area + ((el - edep) * self.edz_widths)
-        self.fp_areas = area - (self.ch_areas + self.edz_areas)
+        self.edz_area = np.interp(edep, el, area) - (self.ch_area + ((edep - edap) * self.ch_width))
+        self.ch_areas = area.values.copy()
+        self.ch_areas[el > edap] = (self.ch_area + ((el - edap) * self.ch_width))[el > edap]
+        self.edz_areas = area.values - self.ch_areas
+        self.edz_areas[el > edep] = (self.edz_area + ((el - edep) * self.edz_width))[el > edep]
+        self.fp_areas = area.values - (self.ch_areas + self.edz_areas)
 
-        self.ch_radius = self.ch_areas / self.ch_p
-        self.edz_radius = self.edz_areas / self.edz_p
+        self.ch_radius = self.ch_areas / self.ch_ps
+        self.ch_radius = np.abs(np.nan_to_num(self.ch_radius, 0, posinf=0, neginf=0))
+        self.edz_radius = self.edz_areas / self.edz_ps
+        self.edz_radius = np.abs(np.nan_to_num(self.edz_radius, 0, posinf=0, neginf=0))
         self.fp_radius = self.fp_areas / self.fp_ps
+        self.fp_radius = np.abs(np.nan_to_num(self.fp_radius, 0, posinf=0, neginf=0))
 
         self.ch_n = np.cumsum(mannings * self.ch_ps) / np.cumsum(self.ch_ps)
         self.edz_n = np.cumsum(mannings * self.edz_ps) / np.cumsum(self.edz_ps)
@@ -75,10 +79,21 @@ class Reach:
 
         if q_method == '1-channel':
             self.discharge = (1 / self.weighted_mannings) * (slope ** 0.5) * (radius ** (2/3)) * (area)
+        elif q_method == '2-channel':
+            n_channel_mod = ((self.ch_n * self.ch_ps) + (self.fp_n * self.fp_ps)) / (self.ch_ps + self.fp_ps)
+            radius_channel_mod = (self.ch_areas + self.fp_areas) / (self.ch_ps + self.fp_ps)
+            q_channel = (1 / n_channel_mod) * (slope ** 0.5) * (radius_channel_mod ** (2/3)) * (self.ch_areas + self.fp_areas)
+            q_channel = np.nan_to_num(q_channel, 0)
+            q_edz = (1 / self.edz_n) * (slope ** 0.5) * (self.edz_radius ** (2/3)) * (self.edz_areas)
+            q_edz = np.nan_to_num(q_edz, 0)
+            self.discharge = q_channel + q_edz
         elif q_method == '3-channel':
             q_channel = (1 / self.ch_n) * (slope ** 0.5) * (self.ch_radius ** (2/3)) * (self.ch_areas)
+            q_channel = np.nan_to_num(q_channel, 0)
             q_edz = (1 / self.edz_n) * (slope ** 0.5) * (self.edz_radius ** (2/3)) * (self.edz_areas)
+            q_edz = np.nan_to_num(q_edz, 0)
             q_fp = (1 / self.fp_n) * (slope ** 0.5) * (self.fp_radius ** (2/3)) * (self.fp_areas)
+            q_fp = np.nan_to_num(q_fp, 0)
             self.discharge = q_channel + q_edz + q_fp
         
         self.discharge = np.nan_to_num(self.discharge, 0, posinf=0)
@@ -216,6 +231,7 @@ def analyze_floods(meta_path):
                 tmp_el = el[reach]
                 tmp_area = area[reach] / tmp_length
                 tmp_volume = volume[reach] / tmp_length
+                tmp_p = perimeter[reach] / tmp_length
                 tmp_radius = radius[reach]
                 tmp_mannings = mannings[reach]
 
@@ -237,7 +253,7 @@ def analyze_floods(meta_path):
                     tmp_edep = tmp_el.max()
 
                 # make a reach
-                tmp_reach = Reach(tmp_da, tmp_slope, tmp_length, tmp_el, tmp_area, tmp_volume, tmp_mannings, tmp_radius, tmp_mannings, tmp_edap, tmp_edep, q_method='1-channel')
+                tmp_reach = Reach(tmp_da, tmp_slope, tmp_length, tmp_el, tmp_area, tmp_volume, tmp_p, tmp_radius, tmp_mannings, tmp_edap, tmp_edep, q_method='3-channel')
 
                 for magnitude in magnitudes:
                     for duration in durations:
