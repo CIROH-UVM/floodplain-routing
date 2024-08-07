@@ -1,6 +1,6 @@
 ## How to generate flood-specific metrics with UVM's topographic extraction tools
 
-Once reach-average cross-sections have been generated from DEM data (see Tutorial 1) and Energy Dissipation Zones have been identified (see Tutorial 2), tools from this repository may be used to derive various flood-specific metrics.  Most of these metrics subdivide the river into one of several zones based on the Energy Dissipation Access Point (EDAP) and Energy Dissipation Exit Point (EDEP).  A rough schematic of the zones is shown below.
+Once reach-average cross-sections have been generated from DEM data (see [Tutorial 1](Topographic_extraction.md)) and Energy Dissipation Zones have been identified (see Tutorial 2), tools from this repository may be used to derive various flood-specific metrics.  Most of these metrics subdivide the river into one of several zones based on the Energy Dissipation Access Point (EDAP) and Energy Dissipation Exit Point (EDEP).  A rough schematic of the zones is shown below.
 
 <img src="../../images/zone_schematic.png" alt= “zone_schematic”>
 
@@ -14,7 +14,7 @@ event\_volume\_edz|Cumulative volume of floodwater that fluxes through the flow-
 event\_ssp|Cumulative specific stream power exerted on the section for a specific flood event|Joules/M^2
 event\_ssp\_ch|Cumulative specific stream power exerted on the channel for a specific flood event|Joules/M^2
 event\_ssp\_edz|Cumulative specific stream power exerted on the EDZ for a specific flood event|Joules/M^2
-tw\_sec|Floodplain width at peak discharge|M
+tw\_sec|Wetted top-width of the section at peak discharge|M
 tw\_ch|Wetted top-width above the channel at peak discharge|M
 tw\_edz|Wetted top-width above the EDZ at peak discharge|M
 area\_sec|Cross-section flow area at peak discharge|M^2
@@ -35,9 +35,11 @@ Users may select a range of flood magnitudes and durations to run.  In the outpu
 To run the flood metric scripts, run the following command
 
 ```console
-/source/floods.py /path/to/run_metadata.json ['Q2', 'Q100'], ['Short', 'Medium', 'Long']
+/source/floods.py /path/to/run_metadata.json ['Q2','Q100'], ['Short','Medium','Long']
 ```
 
 or import the analyze_floods function from floods.py into your python script.
 
 If no magnitudes or durations are provided, the script will run all hydrographs listed in the 'durations' dictionary of regressions.json.
+
+The outputs are saved within the analysis folder of the run.
