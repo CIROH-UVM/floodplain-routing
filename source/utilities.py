@@ -442,7 +442,7 @@ def build_raster(hand_path, aoi_path, reach_field, reach_data, out_name):
     outRaster = driver.Create(out_path, cols, rows, 1, gdal.GDT_Byte, options=['COMPRESS=LZW'])
     outRaster.SetGeoTransform((originX, elevations['pixel_width'], 0, originY, 0, elevations['pixel_height']))
     outband = outRaster.GetRasterBand(1)
-    outband.WriteArray(out_data.astype(np.int8))
+    outband.WriteArray(out_data.astype(np.uint8))
     outband.SetNoDataValue(0)
     outRaster.SetProjection(elevations['crs'])
     outRaster.FlushCache()
@@ -458,6 +458,7 @@ def build_raster(hand_path, aoi_path, reach_field, reach_data, out_name):
     elif len(reaches) > 1:
         query = f"{reach_field} in {tuple(reaches)}"
     reach_polys = gpd.read_file(aoi_path, where=query)[[reach_field, 'geometry']]
+    reach_polys = reach_polys.dissolve(by=reach_field)
     polygonize_raster(out_path, poly_path, reach_polys, rename_dict=reverse_iids)
 
     print('')
@@ -515,7 +516,7 @@ def polygonize_raster(in_path, out_path, reaches=None, rename_dict=None):
 
     if reaches is not None:
         gdf = gpd.GeoDataFrame(gdf).set_crs(crs)
-        gdf = gdf.dissolve()
+        gdf = gdf.dissolve(by='zone', as_index=False)
         reaches = reaches.to_crs(crs)
         gdf = gdf.overlay(reaches, how='intersection')
 
