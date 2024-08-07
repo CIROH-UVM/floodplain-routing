@@ -42,10 +42,16 @@ The 2-channel and 3-channel options are inspired by the work of Matt et al. (202
 
 ## Running the script
 
-To run the flood metric scripts, run the following command
+Help for this command may be obtained by running the following command
 
 ```console
-/source/floods.py /path/to/run_metadata.json ['Q2','Q100'], ['Short','Medium','Long']
+python source/floods.py -h
+```
+
+Example run command
+
+```console
+python source/floods.py /path/to/run_metadata.json ['Q2','Q100'], ['Short','Medium','Long']
 ```
 
 or import the analyze_floods function from floods.py into your python script.
