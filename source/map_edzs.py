@@ -16,10 +16,13 @@ def map_edzs(meta_path):
     # Load EDZ data
     feature_data = pd.read_csv(run_dict['analysis_path'])
     feature_data[run_dict['id_field']] = feature_data[run_dict['id_field']].astype(str)
+    feature_data = feature_data.set_index(run_dict['id_field'])
 
     # Load reaches/basins to run
-    reaches = gpd.read_file(run_dict['reach_path'], ignore_geometry=True)
-    # reaches = reaches[reaches[run_dict['id_field']].isin(feature_data['ReachCode'])]
+    reaches = pd.read_csv(run_dict['reach_meta_path'])
+    reaches[run_dict['id_field']] = reaches[run_dict['id_field']].astype(str)
+    reaches[run_dict['subunit_field']] = reaches[run_dict['subunit_field']].astype(str).str.rjust(4, '0')
+    reaches = reaches.set_index(run_dict['id_field'])
     units = reaches[run_dict['unit_field']].unique()
 
     # Process units
@@ -38,17 +41,21 @@ def map_edzs(meta_path):
             hand_path = os.path.join(run_dict['data_directory'], unit, 'subbasins', subunit, 'rasters', 'HAND.tif')
 
             reachesin_subunit = reaches_in_unit[reaches_in_unit[run_dict["subunit_field"]] == subunit]
-            reach_list = reachesin_subunit[run_dict["id_field"]].unique()
+            reach_list = list(reachesin_subunit.index)
 
-            reaches_in_subunit = feature_data[feature_data[run_dict["id_field"]].isin(reach_list)]
-            reach_data = reaches_in_subunit[['el_edap', 'el_edep']].copy()
+            reaches_in_subunit = feature_data[feature_data.index.isin(reach_list)]
             if len(reaches_in_subunit) == 0:
                 continue
-            reach_data['el_edap'] = reach_data['el_edap'] - reaches_in_subunit['el_bathymetry']
-            reach_data['el_edep'] = reach_data['el_edep'] - reaches_in_subunit['el_bathymetry']
-            reach_data[run_dict["id_field"]] = reaches_in_subunit[run_dict["id_field"]]
+        
+            reach_data = reaches_in_subunit[['el_edap', 'el_edep']].copy()
+            reach_dict = dict()
+            for r in reach_data.index:
+                if not np.isnan(reach_data.loc[r, 'el_edap']) and not np.isnan(reach_data.loc[r, 'el_edep']):
+                    ch_dict = {'label': 'channel', 'min_el': 0, 'max_el': reach_data.loc[r, 'el_edap']}
+                    edz_dict = {'label': 'edz', 'min_el': reach_data.loc[r, 'el_edap'], 'max_el': reach_data.loc[r, 'el_edep']}
+                    reach_dict[r] = {'ID': r, 'zones': [ch_dict, edz_dict]}
 
-            map_edz(hand_path, run_dict["reach_path"], run_dict["id_field"], reach_data)
+            build_raster(hand_path, run_dict["reach_path"], run_dict["id_field"], reach_dict, 'edz')
 
             out_raster_path = os.path.join(os.path.dirname(hand_path), 'edz.tif')
             out_rasters.append(out_raster_path)
@@ -74,8 +81,9 @@ def map_floodplain(meta_path, magnitude):
     flood_data = flood_data.set_index(run_dict['id_field'])
 
     # Load reaches/basins to run
-    reaches = gpd.read_file(run_dict['reach_path'], ignore_geometry=True)
+    reaches = pd.read_csv(run_dict['reach_meta_path'])
     reaches[run_dict['id_field']] = reaches[run_dict['id_field']].astype(str)
+    reaches[run_dict['subunit_field']] = reaches[run_dict['subunit_field']].astype(str).str.rjust(4, '0')
     reaches = reaches.set_index(run_dict['id_field'])
     units = reaches[run_dict['unit_field']].unique()
 
@@ -111,7 +119,7 @@ def map_floodplain(meta_path, magnitude):
 
             out_raster_path = os.path.join(os.path.dirname(hand_path), f'{magnitude}.tif')
             out_rasters.append(out_raster_path)
-            out_poly_path = os.path.join(os.path.dirname(os.path.dirname(hand_path)), f'{magnitude}.shp')
+            out_poly_path = os.path.join(os.path.dirname(os.path.dirname(hand_path)), 'vectors', f'{magnitude}.shp')
             out_polys.append(out_poly_path)
 
         print('\n'*3)
@@ -158,5 +166,6 @@ def merge_subbasins(meta_path, file_name):
 
 if __name__ == '__main__':
     meta_path = sys.argv[1]
-    map_floodplain(meta_path, 'Q100')
-    # map_edzs(meta_path)
+    for m in ['Q2', 'Q10', 'Q50', 'Q100']:
+        map_floodplain(meta_path, m)
+    map_edzs(meta_path)
