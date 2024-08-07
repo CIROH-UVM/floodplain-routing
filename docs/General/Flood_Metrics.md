@@ -1,4 +1,4 @@
-## How to generate flood-specific metrics with UVM's topographic extraction tools
+# How to generate flood-specific metrics with UVM's topographic extraction tools
 
 Once reach-average cross-sections have been generated from DEM data (see [Tutorial 1](Topographic_Extraction.md)) and Energy Dissipation Zones have been identified (see [Tutorial 2](Feature_Extraction.md)), tools from this repository may be used to derive various flood-specific metrics.  Most of these metrics subdivide the river into one of several zones based on the Energy Dissipation Access Point (EDAP) and Energy Dissipation Exit Point (EDEP).  A rough schematic of the zones is shown below.
 
@@ -30,7 +30,17 @@ volume\_conservation|Error check.  Decimal percentage of hydrograph volume in ev
 
 Users may select a range of flood magnitudes and durations to run.  In the output table, the flood magnitude and duration are added as prefixes to all of the metrics above (ex. event_volume becomes Q100_Medium_event_volume).
 
-**_NOTE:_**  Volume Conservation Note. Hydrograph discharge ordinates are used to interpolate various hydraulic geometry measures (flow-area, velocity, etc).  In some cases (especially when discharges yield very small stages), the interpolated approximation leads to volume errors in the event_volume metrics.  Low volume_conservation values (say, lower than 0.95) should be taken with a grain of salt or removed from the analysis.
+**Volume Conservation Note:_**  To develop these metrics, various hydraulic geometry measures (flow-area, velocity, etc) are interpolated for each hydrograph ordinate.  In some cases (especially when discharges yield very small stages), the interpolated approximations may yield discrepancies between the event_volume metric and the direct integration of the flood hydrograph.  Such situations may be identified by low values for volume_conservation.  Any hydrograph metrics with low volume_conservation values (say, lower than 0.95) should be taken with a grain of salt or removed from the analysis.
+
+## Discharge method
+
+There are three options for how this script estimates the relationship between stage and discharge: 1-channel, 2-channel, and 3-channel.
+
+The 1-channel option uses flow area and hydraulic radius of the whole section at each stage to develop a discharge using Manning's Equation.  The 2-channel option calculates discharge for the channel+valley and discharge for the EDZ at each stage and sums them to yield a total section discharge at each stage.  The 3-channel option calculates discharge within each zone seperately and sums them to yield a total section discharge at each stage.
+
+The 2-channel and 3-channel options are inspired by the work of Matt et al. (2023), whereas the 1-channel option is more similar to the approach of Diehl et al. (2021)
+
+## Running the script
 
 To run the flood metric scripts, run the following command
 
@@ -43,3 +53,10 @@ or import the analyze_floods function from floods.py into your python script.
 If no magnitudes or durations are provided, the script will run all hydrographs listed in the 'durations' dictionary of regressions.json.
 
 The outputs are saved within the analysis folder of the run.
+
+
+## References
+
+Diehl RM, Gourevitch JD, Drago S, Wemple BC (2021) Improving flood hazard datasets using a low-complexity, probabilistic floodplain mapping approach. <i>PLOS ONE</i> 16(3): e0248683. https://doi.org/10.1371/journal.pone.0248683
+
+Matt, J. E., Underwood, K. L., Diehl, R. M., Lawson, K. S., Worley, L. C., & Rizzo, D. M. (2023). Terrain-derived measures for basin conservation and restoration planning. <i>River Research and Applications</i>, 39(9), 1795–1811. https://doi.org/10.1002/rra.4181
