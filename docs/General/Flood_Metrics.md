@@ -1,6 +1,6 @@
 ## How to generate flood-specific metrics with UVM's topographic extraction tools
 
-Once reach-average cross-sections have been generated from DEM data (see [Tutorial 1](Topographic_extraction.md)) and Energy Dissipation Zones have been identified (see Tutorial 2), tools from this repository may be used to derive various flood-specific metrics.  Most of these metrics subdivide the river into one of several zones based on the Energy Dissipation Access Point (EDAP) and Energy Dissipation Exit Point (EDEP).  A rough schematic of the zones is shown below.
+Once reach-average cross-sections have been generated from DEM data (see [Tutorial 1](Topographic_Extraction.md)) and Energy Dissipation Zones have been identified (see [Tutorial 2](Feature_Extraction.md)), tools from this repository may be used to derive various flood-specific metrics.  Most of these metrics subdivide the river into one of several zones based on the Energy Dissipation Access Point (EDAP) and Energy Dissipation Exit Point (EDEP).  A rough schematic of the zones is shown below.
 
 <img src="../../images/zone_schematic.png" alt= “zone_schematic”>
 
