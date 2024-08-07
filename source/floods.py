@@ -199,7 +199,7 @@ def analyze_floods(meta_path):
         mannings[:] = float(0.095)
 
     # define magnitudes and durations
-    magnitudes = ['Q2', 'Q10', 'Q50', 'Q100']
+    magnitudes = ['Q2', 'Q5', 'Q10', 'Q25', 'Q50', 'Q100', 'Q200', 'Q500']
     durations = ['Short', 'Medium', 'Long']
 
     # Make an empty dataframe to store results
