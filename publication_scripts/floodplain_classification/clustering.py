@@ -49,6 +49,7 @@ clusterer.feature_cols = ['el_edap_scaled', 'el_edep_scaled', 'height_scaled', '
 clusterer.features = clusterer.features.rename(columns=rename_dict)
 clusterer.feature_cols = [rename_dict[col] for col in clusterer.feature_cols]
 relabels = {1: 'A', 0: 'B', 2: 'C', 5: 'D', 4: 'E', 3: 'F', 6: 'G', 'W': 'W', 'X': 'X'}
+relabels = {1: 'I', 0: 'II', 2: 'III', 5: 'IV', 4: 'V', 3: 'VI', 6: 'G', 'W': 'W', 'X': 'X'}
 clusterer.clusters['cluster'] = clusterer.clusters['cluster'].map(relabels)
 for k, v in relabels.items():
     if k in clusterer.medoid_dict:
@@ -72,9 +73,9 @@ lables = ['50% AEP', '10% AEP', '2% AEP', '1% AEP']
 
 
 # Plotting
-# clusterer.plot_summary(fake_medoids=True)
-clusterer.plot_feature_boxplots(transformed=False)
+clusterer.plot_summary()
+# clusterer.plot_feature_boxplots(transformed=False)
 # clusterer.plot_boxplots_general(['Drainage Area', 'Valley Confinement', 'Slope'])
 # clusterer.plot_routing()
-# clusterer.save_clusters()
-# clusterer.save_all_data()
+clusterer.save_clusters()
+clusterer.save_all_data()
