@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 import sys
+import argparse
 import os
 from scipy.ndimage import gaussian_filter1d
 from scipy.interpolate import splev, splrep
@@ -14,6 +15,13 @@ with open('source/regressions.json') as in_file:
 FEATURE_NAMES = ['length', 'slope', 'DASqKm', 'wbody', 'ave_rhp', 'stdev_rhp', 'Ave_Rh', 'cumulative_volume', 'cumulative_height', 'valley_confinement', 'el_bathymetry', 'el_edap', 'el_min', 'el_edep', 'el_bathymetry_scaled', 'el_edap_scaled', 'el_min_scaled', 'el_edep_scaled', 'height', 'height_scaled', 'vol', 'vol_scaled', 'min_rhp', 'slope_start_min', 'slope_min_stop', 'rh_bottom', 'rh_edap', 'rh_min', 'rh_edep', 'w_bottom', 'w_edap', 'w_min', 'w_edep', 'w_edap_scaled', 'w_edep_scaled', 'edz_count', 'min_loc_ratio', 'rhp_pre', 'rhp_post', 'rhp_post_stdev', 'invalid_geometry', 'regression_valley_confinement', 'streamorder']
 ERROR_ARRAY = [np.nan for i in FEATURE_NAMES]
 ERROR_DICT = {k: np.nan for k in FEATURE_NAMES}
+
+### PARSING ###
+parser = argparse.ArgumentParser(description='Extract EDZ features from reach-scale geometry.')
+parser.add_argument('meta_path', type=str, help='Path to run_metadata.json for this run.')
+parser.add_argument('-plot', type=bool, help='Whether to generate diagnostic plots (optional)', required=False)
+parser.add_argument('-subset', type=list, help='List of reaches to analyze (optional)', required=False)
+
 
 class ReachPlot:
 
@@ -273,8 +281,8 @@ def extract_features(run_path, plot=False, subset=None):
     # Load data
     with open(run_path, 'r') as f:
         run_dict = json.loads(f.read())
-    working_dir = run_dict['geometry_directory']
-    reach_path = run_dict['reach_meta_path']
+    working_dir = os.path.join(run_dict['run_directory'], 'geometry')
+    reach_path = os.path.join(run_dict['run_directory'], 'network', 'reach_data.csv')
     el_path = os.path.join(working_dir, 'el.csv')
     el_scaled_path = os.path.join(working_dir, 'el_scaled.csv')
     rh_path = os.path.join(working_dir, 'rh.csv')
@@ -345,7 +353,9 @@ def extract_features(run_path, plot=False, subset=None):
         if plot:
             slope = tmp_meta['slope']
             da = tmp_meta['TotDASqKm']
-            reach_plot = ReachPlot(run_dict['geometry_diagnostics'], reach, da, slope)
+            diagnostics_path = os.path.join(run_dict['run_directory'], 'geometry', 'diagnostics')
+            os.makedirs(diagnostics_path, exist_ok=True)
+            reach_plot = ReachPlot(diagnostics_path, reach, da, slope)
 
         # Error handling
         if np.all(tmp_area < 1):
@@ -452,9 +462,12 @@ def extract_features(run_path, plot=False, subset=None):
             reach_plot.add_aeps(q)
             reach_plot.save()
 
+    print(f'{len(valid_reaches)} / {len(valid_reaches)} reaches processed')
+
     # Save
-    if os.path.exists(run_dict['muskingum_path']):
-        merge_df = run_dict['muskingum_path']
+    muskingum_path = os.path.join(run_dict['run_directory'], 'muskingum-cunge', 'mc_data.csv')
+    if os.path.exists(muskingum_path):
+        merge_df = muskingum_path
 
         merge_df = pd.read_csv(merge_df)
         merge_df[run_dict['id_field']] = merge_df[run_dict['id_field']].astype(int).astype(str)
@@ -464,11 +477,11 @@ def extract_features(run_path, plot=False, subset=None):
         out_df = merge_df.merge(features, how='inner', left_index=True, right_index=True)
     else:
         out_df = features
-    os.makedirs(os.path.dirname(run_dict['analysis_path']), exist_ok=True)
-    out_df.to_csv(run_dict['analysis_path'], index_label=run_dict['id_field'])
+    analysis_path = os.path.join(run_dict['run_directory'], 'analysis', 'data.csv')
+    os.makedirs(os.path.dirname(analysis_path), exist_ok=True)
+    out_df.to_csv(analysis_path, index_label=run_dict['id_field'])
 
 
 if __name__ == '__main__':
-    run_path = sys.argv[1]
-    subset = ['60000200014264']
-    extract_features(run_path, plot=False, subset=None)
+    args = parser.parse_args()
+    extract_features(args.meta_path, plot=args.plot, subset=args.subset)
