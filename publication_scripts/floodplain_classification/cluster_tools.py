@@ -188,6 +188,8 @@ class FpClusterer(ClusterCollection):
         el_scaled_path = os.path.join(working_dir, 'el_scaled.csv')
         rh_prime_path = os.path.join(working_dir, 'rh_prime.csv')
         width_path = os.path.join(working_dir, 'area.csv')
+        area_path = os.path.join(working_dir, 'vol.csv')
+        rh_path = os.path.join(working_dir, 'rh.csv')
         celerity_path = os.path.join(working_dir, 'celerity.csv')
 
         feature_data = pd.read_csv(features_path)
@@ -205,23 +207,31 @@ class FpClusterer(ClusterCollection):
         width_data = pd.read_csv(width_path)
         self.width_data = width_data.dropna(axis=1)
 
+        area_data = pd.read_csv(area_path)
+        area_data = area_data.dropna(axis=1)
+
+        rh_data = pd.read_csv(rh_path)
+        rh_data = rh_data.dropna(axis=1)
+
         cel_data = pd.read_csv(celerity_path)
         self.cel_data = cel_data.dropna(axis=1)
         self.features['celerity'] = 0.0
         for c in cel_data.columns:
             if not c in self.features.index:
                 continue
-            elif self.features.loc[c, 'edz_count'] > 0:
-                tmp_el = el_scaled_data[c].values
-                edap = self.features.loc[c, 'el_edap_scaled']
-                edap = np.argmax(tmp_el > edap)
-                edep = self.features.loc[c, 'el_edep_scaled']
-                edep = np.argmax(tmp_el > edep)
-                if edap >= edep:
-                    edep = edap + 1
-                self.features.loc[c, 'celerity'] = cel_data[c].values[edap:edep].mean()  # average celerity for EDZ
             else:
-                self.features.loc[c, 'celerity'] = cel_data[c].values[0:500].mean()
+                tmp_a = area_data[c].values
+                tmp_rh = rh_data[c].values
+                q = (1 / 0.07) * np.sqrt(self.features.loc[c]['slope']) * tmp_a * (tmp_rh ** (2 / 3))
+                q2 = 48.2 * (self.features.loc[c]['DASqKm'] ** 0.869)
+                q100 = 197 * (self.features.loc[c]['DASqKm'] ** 0.827)
+                start_ind = np.argmax(q > q2)
+                end_ind = np.argmax(q > q100)
+                if start_ind == end_ind:
+                    end_ind = start_ind + 1
+                if end_ind == 0:
+                    end_ind = -1
+                self.features.loc[c, 'celerity'] = cel_data[c].values[start_ind:end_ind].mean()
         self.features['celerity_detrended'] = np.log(self.features['celerity']) - np.log((self.features['slope'] ** 0.5) * (1 / 0.07))
         self.features['celerity_detrended'] = np.exp(self.features['celerity_detrended'])
 
@@ -231,21 +241,6 @@ class FpClusterer(ClusterCollection):
         rh_prime_data[:] = gaussian_filter1d(rh_prime_data.T, 15).T
         rh_prime_data[rh_prime_data < -3] = -3
         self.rh_prime_data = rh_prime_data.dropna(axis=1)
-
-        # Add attenuation
-        # if os.path.exists(run_dict['muskingum_path']):
-        #     magnitudes = ['Q2', 'Q10', 'Q50', 'Q100']
-        #     durations = ['Short', 'Medium', 'Long']
-
-        #     with open(r'source/regressions.json', 'r') as f:
-        #         regressions = json.loads(f.read())
-        #     regressions = regressions['peak_flowrate']
-        #     for m in magnitudes:
-        #         peak_estimate = ((self.features['DASqKm'].to_numpy() / 2.59) ** regressions[m][1]) * regressions[m][0] * (1 / 35.3147)
-        #         for d in durations:
-        #             self.features[f'{m}_{d}_cms_attenuation'] = self.features[f'{m}_{d}_pct_attenuation'] * peak_estimate
-        #             total_lengths = (self.features[f'{m}_{d}_dx'] * self.features[f'{m}_{d}_subreaches']) / 1000
-        #             self.features[f'{m}_{d}_cms_attenuation_per_km'] = self.features[f'{m}_{d}_cms_attenuation'] / total_lengths
 
         self.feature_cols = feature_cols
         self.clusters = pd.DataFrame(index=self.features.index, columns=['cluster'])
@@ -272,6 +267,7 @@ class FpClusterer(ClusterCollection):
             # Formatting and labelling
             fs = 16
             ax[i].set_title(f'n={len(self.features[mask])}', fontsize=fs)
+            ax[i].text(0.05, 0.97, ord[i], fontsize=24, transform=ax[i].transAxes, ha='left', va='top')
             ax[i].set_xlim(-3.1, 1.1)
             ax[i].set_xticks([-3, 0, 1])
             if i == 0:
@@ -488,7 +484,6 @@ class FpClusterer(ClusterCollection):
         fig.tight_layout()
         fig.savefig(os.path.join(self.out_dir, 'cluster_summary.png'), dpi=300)
         fig.savefig(os.path.join(self.out_dir, 'cluster_summary.pdf'), dpi=300)
-        fig.savefig(os.path.join(self.out_dir, 'cluster_summary.eps'), dpi=300, format='eps')
 
     def plot_routing(self):
         ord = sorted(self.clusters['cluster'].unique())
