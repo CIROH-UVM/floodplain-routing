@@ -348,10 +348,11 @@ def extract_features(run_path, plot=False, subset=None):
             reach_plot = ReachPlot(run_dict['geometry_diagnostics'], reach, da, slope)
 
         # Error handling
-        if np.all(tmp_area == 0):
+        if np.all(tmp_area < 1):
             if plot:
                 reach_plot.no_geometry()
             features.loc[reach, 'invalid_geometry'] = 1
+            print(reach)
             continue
         
         # Process
@@ -361,10 +362,15 @@ def extract_features(run_path, plot=False, subset=None):
         edzs = get_edzs(tmp_el, tmp_el_scaled, tmp_rh, tmp_rh_prime, tmp_area, thresh, max_stage)
         q = (1 / 0.07) * tmp_volume * (tmp_rh ** (2 / 3)) * (tmp_meta['slope'] ** 0.5)
         q500 = REGRESSIONS['peak_flowrate']['Q500'][0] * ((tmp_meta['TotDASqKm'] / 2.59) ** REGRESSIONS['peak_flowrate']['Q500'][1]) * (1 / 35.3147)
+        q100 = REGRESSIONS['peak_flowrate']['Q100'][0] * ((tmp_meta['TotDASqKm'] / 2.59) ** REGRESSIONS['peak_flowrate']['Q100'][1]) * (1 / 35.3147)
         q500_ind = np.argmax(q > q500)
+        q100_ind = np.argmax(q > q100)
         if q500_ind == 0:
             q500_ind = len(q) - 1
+        if q100_ind == 0:
+            q100_ind = len(q) - 1
         q500_w = tmp_area[q500_ind]
+        q100_w = tmp_area[q100_ind]
         bkf_w = 3.12 * (tmp_meta['TotDASqKm'] ** 0.415)
         regression_valley_confinement = q500_w / bkf_w
 
@@ -386,6 +392,7 @@ def extract_features(run_path, plot=False, subset=None):
         features.loc[reach, 'regression_valley_confinement'] = regression_valley_confinement
         features.loc[reach, 'streamorder'] = tmp_meta['s_order']
         features.loc[reach, 'q500_w'] = q500_w
+        features.loc[reach, 'q100_w'] = q100_w
         features.loc[reach, 'invalid_geometry'] = 0
         if edz_count == 0:
             features.loc[reach, 'cumulative_volume'] = 0
@@ -463,5 +470,5 @@ def extract_features(run_path, plot=False, subset=None):
 
 if __name__ == '__main__':
     run_path = sys.argv[1]
-    subset = ['60000200039195']
+    subset = ['60000200014264']
     extract_features(run_path, plot=False, subset=None)
