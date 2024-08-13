@@ -1,6 +1,7 @@
 import json
 import os
 import sys
+import argparse
 import time
 import numpy as np
 import pandas as pd
@@ -12,6 +13,12 @@ Q_QP_ORDINATES = np.array([0, 0.03, 0.1, 0.19, 0.31, 0.47, 0.66, 0.82, 0.93, 0.9
 with open('source/regressions.json') as in_file:
     REGRESSIONS = json.load(in_file)
 
+### PARSING ###
+parser = argparse.ArgumentParser(description='Calculate flood-specific metrics for reaches.')
+parser.add_argument('meta_path', type=str, help='Path to the run metadata file.')
+parser.add_argument('-magnitudes', type=str, help='Comma-separated list of magnitudes to analyze. Ex. ["Q2","Q100"]', required=False)
+parser.add_argument('-durations', type=str, help='Comma-separated list of durations to analyze.  Ex. ["Short","Medium"]', required=False)
+parser.add_argument('-q_method', type=str, help='Method to calculate discharge. Options: 1-channel, 2-channel, 3-channel.', required=False, default='1-channel')
 
 def get_hydrograph(da, magnitude, duration, resolution=None):
     # Get hydrograph ordinates from regressions
@@ -170,7 +177,7 @@ class Reach:
         }
         return metrics
 
-def analyze_floods(meta_path):
+def analyze_floods(meta_path, magnitudes=None, durations=None, q_method='1-channel'):
     # Load run config
     with open(meta_path, 'r') as f:
         run_dict = json.loads(f.read())
@@ -199,8 +206,12 @@ def analyze_floods(meta_path):
         mannings[:] = float(0.095)
 
     # define magnitudes and durations
-    magnitudes = ['Q2', 'Q5', 'Q10', 'Q25', 'Q50', 'Q100', 'Q200', 'Q500']
-    durations = ['Short', 'Medium', 'Long']
+    available_regressions = REGRESSIONS['duration'].keys()
+    if magnitudes is None:
+        magnitudes = list(set([x.split('_')[0] for x in available_regressions]))
+        durations = list(set([x.split('_')[1] for x in available_regressions]))
+    elif durations is None:
+        durations = list(set([x.split('_')[1] for x in available_regressions if x.split('_')[0] in magnitudes]))
 
     # Make an empty dataframe to store results
     metric_list = ['event_volume', 'event_volume_ch', 'event_volume_edz', 'event_ssp', 'event_ssp_ch', 'event_ssp_edz', 'tw_sec', 'tw_ch', 'tw_edz', 'area_sec', 'area_ch', 'area_edz', 'vol_sec', 'vol_ch', 'vol_edz', 'peak_stage', 'peak_stage_scaled', 'volume_conservation']
@@ -253,7 +264,7 @@ def analyze_floods(meta_path):
                     tmp_edep = tmp_el.max()
 
                 # make a reach
-                tmp_reach = Reach(tmp_da, tmp_slope, tmp_length, tmp_el, tmp_area, tmp_volume, tmp_p, tmp_radius, tmp_mannings, tmp_edap, tmp_edep, q_method='3-channel')
+                tmp_reach = Reach(tmp_da, tmp_slope, tmp_length, tmp_el, tmp_area, tmp_volume, tmp_p, tmp_radius, tmp_mannings, tmp_edap, tmp_edep, q_method=q_method)
 
                 for magnitude in magnitudes:
                     for duration in durations:
@@ -277,5 +288,5 @@ def analyze_floods(meta_path):
 
 
 if __name__ == '__main__':
-    meta_path = sys.argv[1]
-    analyze_floods(meta_path)
+    args = parser.parse_args()
+    analyze_floods(**vars(args))
