@@ -28,9 +28,10 @@ parser = argparse.ArgumentParser(description='Download NHD for HUC4 of interest 
 parser.add_argument('meta_path', type=str, help='Path to run_metadata.json for this run.')
 
 def download_data(run_dict):
+    network_directory = os.path.join(run_dict['run_directory'], 'network')
     url = f'https://prd-tnm.s3.amazonaws.com/StagedProducts/Hydrography/NHDPlusHR/VPU/Current/GDB/NHDPLUS_H_{run_dict["huc4"]}_HU4_GDB.zip'
-    zip_path = os.path.join(run_dict['network_directory'], 'NHD.zip')
-    unzip_path = os.path.join(run_dict['network_directory'], 'NHD')
+    zip_path = os.path.join(network_directory, 'NHD.zip')
+    unzip_path = os.path.join(network_directory, 'NHD')
 
     print('Starting download')
     r = requests.get(url, stream=True)
@@ -46,12 +47,14 @@ def download_data(run_dict):
 
 def gdb2sql(run_dict):
     print('Exporting VAA table from GDB')
-    gdb_path = os.path.join(run_dict['network_directory'], 'NHD', f'NHDPLUS_H_{run_dict["huc4"]}_HU4_GDB.gdb')
-    if os.path.exists(run_dict['network_db_path']):
-        os.remove(run_dict['network_db_path'])
-    subprocess.run([OGR_PATH, '-f', 'SQLite', run_dict['network_db_path'], gdb_path, 'NHDPlusFlowlineVAA'])
+    network_directory = os.path.join(run_dict['run_directory'], 'network')
+    network_db_path = os.path.join(network_directory, 'vaa.db')
+    gdb_path = os.path.join(network_directory, 'NHD', f'NHDPLUS_H_{run_dict["huc4"]}_HU4_GDB.gdb')
+    if os.path.exists(network_db_path):
+        os.remove(network_db_path)
+    subprocess.run([OGR_PATH, '-f', 'SQLite', network_db_path, gdb_path, 'NHDPlusFlowlineVAA'])
 
-    conn = sqlite3.connect(run_dict['network_db_path'])
+    conn = sqlite3.connect(network_db_path)
     c = conn.cursor()
 
     c.execute('CREATE TABLE tmp (fromnode TEXT, tonode TEXT, nhdplusid TEXT PRIMARY KEY, reachcode TEXT, hydroseq TEXT, dnhydroseq TEXT, totdasqkm REAL, minelevsmo REAL, maxelevsmo REAL, slopelenkm REAL, streamorde INTEGER)')
@@ -69,6 +72,8 @@ def gdb2sql(run_dict):
 
 def merge_reaches(run_dict, agg_method='length', merge_thresh=None):
     # merge small DA reaches with d/s reachcode
+    network_directory = os.path.join(run_dict['run_directory'], 'network')
+    network_db_path = os.path.join(network_directory, 'vaa.db')
     with open(os.path.join(os.path.dirname(__file__), 'generate_mainstems.sql'), 'r') as in_file:
         mainstems = in_file.read()
 
@@ -76,12 +81,12 @@ def merge_reaches(run_dict, agg_method='length', merge_thresh=None):
         refactor = in_file.read()
 
     print('Merging reaches and gathering metadata')
-    conn = sqlite3.connect(run_dict['network_db_path'])
+    conn = sqlite3.connect(network_db_path)
     c = conn.cursor()
 
     if agg_method == 'length':
         c.executescript(mainstems)
-        balance_lengths(conn, c, run_dict, thresh=merge_thresh)
+        balance_lengths(conn, c, thresh=merge_thresh)
         c.executescript(refactor)
         conn.commit()
     elif agg_method == 'reachcode':
@@ -101,7 +106,7 @@ def merge_reaches(run_dict, agg_method='length', merge_thresh=None):
     c.execute(f'INSERT INTO reach_data ({run_dict["id_field"]}, TotDASqKm, min_el, max_el, length, s_order) SELECT uvm.id, max(nhd.totdasqkm), min(nhd.minelevsmo), max(nhd.maxelevsmo), sum(nhd.slopelenkm)*1000, max(nhd.streamorde) FROM nhdplusflowlinevaa nhd JOIN merged uvm ON uvm.nhdplusid = nhd.nhdplusid WHERE nhd.mainstem=1 GROUP BY uvm.id')
     conn.commit()
 
-def balance_lengths(conn, cur, run_dict, thresh=1000):
+def balance_lengths(conn, cur, thresh=1000):
     mainstems = pd.read_sql_query("SELECT fromnode, tonode, totdasqkm, slopelenkm from nhdplusflowlinevaa where mainstem = 1", conn)
     mainstems['fromnode'] = mainstems['fromnode'].astype(int).astype(str)
     mainstems['tonode'] = mainstems['tonode'].astype(int).astype(str)
@@ -229,7 +234,9 @@ def merge_short_reaches(conn, c, length_threshold=500):
 def clip_to_study_area(run_dict, water_toggle=0.05):
     # Clip flowlines and subcatchments to catchments of interest
     print('Loading Merged VAA table')
-    conn = sqlite3.connect(run_dict['network_db_path'])
+    network_directory = os.path.join(run_dict['run_directory'], 'network')
+    network_db_path = os.path.join(network_directory, 'vaa.db')
+    conn = sqlite3.connect(network_db_path)
     merged = pd.read_sql_query("SELECT * from merged", conn)
     meta = pd.read_sql_query("SELECT * from reach_data", conn)
 
@@ -237,7 +244,7 @@ def clip_to_study_area(run_dict, water_toggle=0.05):
     subbasins = gpd.read_file(run_dict['subunit_path'])
 
     print('Loading NHD Flowlines')
-    gdb_path = os.path.join(run_dict['network_directory'], 'NHD', f'NHDPLUS_H_{run_dict["huc4"]}_HU4_GDB.gdb')
+    gdb_path = os.path.join(network_directory, 'NHD', f'NHDPLUS_H_{run_dict["huc4"]}_HU4_GDB.gdb')
     nhd = gpd.read_file(gdb_path, driver='OpenFileGDB', layer='NHDFlowline')
     nhd = nhd[['NHDPlusID', 'geometry']]
     nhd['NHDPlusID'] = nhd['NHDPlusID'].astype(int).astype(str)
@@ -273,7 +280,8 @@ def clip_to_study_area(run_dict, water_toggle=0.05):
     intersected['wbody'] = intersected['wbody'].fillna(False)
     
     print('Saving to file')
-    intersected.to_file(run_dict['flowline_path'])
+    flowline_path = os.path.join(network_directory, 'flowlines.shp')
+    intersected.to_file(flowline_path)
     intersected = intersected.drop(['geometry'], axis=1)
     
     print('Loading NHD Catchments')
@@ -285,16 +293,18 @@ def clip_to_study_area(run_dict, water_toggle=0.05):
     nhd = nhd.merge(intersected, how='inner', on='NHDPlusID')
 
     print('Saving to file')
-    nhd.to_file(run_dict['reach_path'])
+    reach_path = os.path.join(network_directory, 'catchments.shp')
+    nhd.to_file(reach_path)
 
     print('Generating reach metadata table')
+    reach_meta_path = os.path.join(network_directory, 'reach_data.csv')
     meta = meta[meta[run_dict["id_field"]].isin(nhd[run_dict["id_field"]].unique())]
     subunits = nhd[[run_dict["id_field"], 'Code_name']].drop_duplicates()
     meta = meta.merge(subunits, how='left', on=run_dict["id_field"])
     meta[['8_code', run_dict['subunit_field']]] = meta['Code_name'].str.split('_', expand=True)
     meta[run_dict['unit_field']] = meta['8_code'].map(NAME_DICT)
     meta = meta.merge(wbody_intersect[[run_dict["id_field"], 'wbody']], on=run_dict["id_field"], how='left').fillna(False)
-    meta.to_csv(run_dict['reach_meta_path'], index=False)
+    meta.to_csv(reach_meta_path, index=False)
 
 def run_all(meta_path):
     # Load run config and initialize directory structure
@@ -307,8 +317,9 @@ def run_all(meta_path):
     clip_to_study_area(run_dict)
 
     print('Cleaning up')
-    shutil.rmtree(os.path.join(run_dict['network_directory'], 'NHD'))
-    os.remove(os.path.join(run_dict['network_directory'], 'NHD.zip'))
+    network_directory = os.path.join(run_dict['run_directory'], 'network')
+    shutil.rmtree(os.path.join(network_directory, 'NHD'))
+    os.remove(os.path.join(network_directory, 'NHD.zip'))
 
 
 if __name__ == '__main__':
