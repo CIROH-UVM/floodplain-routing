@@ -1,11 +1,17 @@
 import os
 import sys
+import argparse
 import time
 import pandas as pd
 import numpy as np
 import json
-from utilities import subunit_hydraulics, add_bathymetry, nwm_subunit, calc_celerity
+from utilities import subunit_hydraulics, add_bathymetry, nwm_subunit
 
+GEOMETRY_FIELDS = ['el', 'area', 'vol', 'p', 'rh', 'rh_prime']
+
+### PARSING ###
+parser = argparse.ArgumentParser(description='Batch controller to extract geometry from topography.')
+parser.add_argument('meta_path', type=str, help='Path to run_metadata.json for this run.')
 
 def extract_geometry(meta_path):
     # Load run config
@@ -19,12 +25,14 @@ def extract_geometry(meta_path):
         max_stage_equation = lambda da: 10
 
     # Load reaches/basins to run
-    reaches = pd.read_csv(run_dict['reach_meta_path'], dtype={'12_code': str, run_dict['id_field']: int})
+    reach_path = os.path.join(run_dict['run_directory'], 'network', 'catchments.shp')
+    reach_data_path = os.path.join(run_dict['run_directory'], 'network', 'reach_data.csv')
+    reaches = pd.read_csv(reach_data_path, dtype={'12_code': str, run_dict['id_field']: int})
     reaches[run_dict['id_field']] = reaches[run_dict['id_field']].astype(str)
     units = reaches[run_dict['unit_field']].unique()
 
     # Initialize logging
-    data_dict = {f: list() for f in run_dict['fields_of_interest']}
+    data_dict = {f: list() for f in GEOMETRY_FIELDS}
 
     # Process units
     for unit in units:
@@ -51,7 +59,7 @@ def extract_geometry(meta_path):
                     print(f'No data for {subunit} found')
                     continue
 
-                su_data_dict = subunit_hydraulics(hand_path, run_dict['reach_path'], slope_path, stages, reach_field=run_dict['id_field'], reaches=reach_list, fields_of_interest=run_dict['fields_of_interest'], el_type='hand')
+                su_data_dict = subunit_hydraulics(hand_path, reach_path, slope_path, stages, reach_field=run_dict['id_field'], reaches=reach_list, fields_of_interest=GEOMETRY_FIELDS, el_type='hand')
             elif run_dict['geometry_source'] == 'DEM':
                 dem_path = os.path.join(run_dict['data_directory'], unit, 'subbasins', subunit, 'rasters', 'DEM.tif')
                 slope_path = os.path.join(run_dict['data_directory'], unit, 'subbasins', subunit, 'rasters', 'slope.tif')
@@ -59,14 +67,14 @@ def extract_geometry(meta_path):
                     print(f'No data for {subunit} found')
                     continue
 
-                su_data_dict = subunit_hydraulics(dem_path, run_dict['reach_path'], slope_path, stages, reach_field=run_dict['id_field'], reaches=reach_list, fields_of_interest=run_dict['fields_of_interest'], el_type='dem')
+                su_data_dict = subunit_hydraulics(dem_path, reach_path, slope_path, stages, reach_field=run_dict['id_field'], reaches=reach_list, fields_of_interest=GEOMETRY_FIELDS, el_type='dem')
             elif run_dict['geometry_source'] == 'NWM':
                 length_list = reachesin_subunit['length'].values
                 da_list = reachesin_subunit['TotDASqKm'].values
 
-                su_data_dict = nwm_subunit(das=da_list, stages=stages, lengths=length_list, reaches=reach_list, fields_of_interest=run_dict['fields_of_interest'])
+                su_data_dict = nwm_subunit(das=da_list, stages=stages, lengths=length_list, reaches=reach_list, fields_of_interest=GEOMETRY_FIELDS)
 
-            for f in run_dict['fields_of_interest']:
+            for f in GEOMETRY_FIELDS:
                 data_dict[f].append(su_data_dict[f])
         
         print('\n'*3)
@@ -74,14 +82,15 @@ def extract_geometry(meta_path):
         print('='*50)
 
     print('Saving data')
-    os.makedirs(run_dict['geometry_directory'], exist_ok=True)
-    for f in run_dict['fields_of_interest']:
+    geometry_directory = os.path.join(run_dict['run_directory'], 'geometry')
+    os.makedirs(geometry_directory, exist_ok=True)
+    for f in GEOMETRY_FIELDS:
         data_dict[f] = pd.concat(data_dict[f], axis=1)
-        data_dict[f].to_csv(os.path.join(run_dict['geometry_directory'], f'{f}.csv'), index=False)
+        data_dict[f].to_csv(os.path.join(geometry_directory, f'{f}.csv'), index=False)
     reaches[run_dict['id_field']] = reaches[run_dict['id_field']].astype(np.int64).astype(str)
     reaches = reaches.set_index(run_dict['id_field'])
     data_dict['el_scaled'] = scale_stages(reaches, data_dict['el'])
-    data_dict['el_scaled'].to_csv(os.path.join(run_dict['geometry_directory'], 'el_scaled.csv'), index=False)
+    data_dict['el_scaled'].to_csv(os.path.join(geometry_directory, 'el_scaled.csv'), index=False)
     print('Finished saving')
 
 def batch_add_bathymetry(meta_path):
@@ -90,13 +99,15 @@ def batch_add_bathymetry(meta_path):
         run_dict = json.load(f)
 
     # Import data
-    geometry = {'el': pd.read_csv(os.path.join(run_dict['geometry_directory'], 'el.csv')),
-                'area': pd.read_csv(os.path.join(run_dict['geometry_directory'], 'area.csv')),
-                'vol': pd.read_csv(os.path.join(run_dict['geometry_directory'], 'vol.csv')),
-                'p': pd.read_csv(os.path.join(run_dict['geometry_directory'], 'p.csv')),
-                'rh': pd.read_csv(os.path.join(run_dict['geometry_directory'], 'rh.csv')),
-                'rh_prime': pd.read_csv(os.path.join(run_dict['geometry_directory'], 'rh_prime.csv'))}
-    reach_data = pd.read_csv(run_dict['reach_meta_path'])
+    geometry_directory = os.path.join(run_dict['run_directory'], 'geometry')
+    geometry = {'el': pd.read_csv(os.path.join(geometry_directory, 'el.csv')),
+                'area': pd.read_csv(os.path.join(geometry_directory, 'area.csv')),
+                'vol': pd.read_csv(os.path.join(geometry_directory, 'vol.csv')),
+                'p': pd.read_csv(os.path.join(geometry_directory, 'p.csv')),
+                'rh': pd.read_csv(os.path.join(geometry_directory, 'rh.csv')),
+                'rh_prime': pd.read_csv(os.path.join(geometry_directory, 'rh_prime.csv'))}
+    reach_data_path = os.path.join(run_dict['run_directory'], 'network', 'reach_data.csv')
+    reach_data = pd.read_csv(reach_data_path)
     reach_data = reach_data.dropna(subset=[run_dict['id_field']])
     reach_data[run_dict['id_field']] = reach_data[run_dict['id_field']].astype(np.int64).astype(str)
     reach_data = reach_data.set_index(run_dict['id_field'])
@@ -165,11 +176,9 @@ def batch_add_bathymetry(meta_path):
     out_dfs['el_scaled'] = scale_stages(reach_data, out_dfs['el'])
 
     for i in out_dfs:
-        out_dfs[i].to_csv(os.path.join(run_dict['geometry_directory'], f'{i}.csv'), index=False)
+        out_dfs[i].to_csv(os.path.join(geometry_directory, f'{i}.csv'), index=False)
         continue
     
-    with open(meta_path, 'w') as f:
-        json.dump(run_dict, f)
 
     
 def scale_stages(reach_data, el_data):
@@ -183,6 +192,6 @@ def scale_stages(reach_data, el_data):
     return el_scaled_data
 
 if __name__ == '__main__':
-    meta_path = sys.argv[1]
-    extract_geometry(meta_path)
-    batch_add_bathymetry(meta_path)
+    args = parser.parse_args()
+    extract_geometry(args.meta_path)
+    batch_add_bathymetry(args.meta_path)
