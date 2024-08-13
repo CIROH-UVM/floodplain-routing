@@ -59,7 +59,7 @@ def map_edzs(meta_path):
 
             out_raster_path = os.path.join(os.path.dirname(hand_path), 'edz.tif')
             out_rasters.append(out_raster_path)
-            out_poly_path = os.path.join(os.path.dirname(os.path.dirname(hand_path)), 'edz.shp')
+            out_poly_path = os.path.join(os.path.dirname(os.path.dirname(hand_path)), 'vectors', 'edz.shp')
             out_polys.append(out_poly_path)
         print('\n'*3)
         print(f'Completed processing {unit} in {round((time.perf_counter() - t1) / 60, 1)} minutes')
@@ -166,6 +166,6 @@ def merge_subbasins(meta_path, file_name):
 
 if __name__ == '__main__':
     meta_path = sys.argv[1]
-    for m in ['Q2', 'Q10', 'Q50', 'Q100']:
+    for m in ['Q2', 'Q5', 'Q10','Q25', 'Q50', 'Q100', 'Q200', 'Q500']:
         map_floodplain(meta_path, m)
     map_edzs(meta_path)
