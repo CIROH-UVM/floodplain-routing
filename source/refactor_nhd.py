@@ -4,6 +4,7 @@ import shutil
 import zipfile
 import os
 import sys
+import argparse
 import sqlite3
 import geopandas as gpd
 import pandas as pd
@@ -21,6 +22,10 @@ NAME_DICT = {
     'MET': 'mettawee',
     'LKC': 'champlain'
     }
+
+### PARSING ###
+parser = argparse.ArgumentParser(description='Download NHD for HUC4 of interest and refactor.')
+parser.add_argument('meta_path', type=str, help='Path to run_metadata.json for this run.')
 
 def download_data(run_dict):
     url = f'https://prd-tnm.s3.amazonaws.com/StagedProducts/Hydrography/NHDPlusHR/VPU/Current/GDB/NHDPLUS_H_{run_dict["huc4"]}_HU4_GDB.zip'
@@ -307,5 +312,5 @@ def run_all(meta_path):
 
 
 if __name__ == '__main__':
-    meta_path = sys.argv[1]
-    run_all(meta_path)
+    args = parser.parse_args()
+    run_all(args.meta_path)
