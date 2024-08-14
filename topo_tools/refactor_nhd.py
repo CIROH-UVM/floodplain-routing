@@ -311,6 +311,8 @@ def get_reaches(meta_path, target_length=1000):
     # Load run config and initialize directory structure
     with open(meta_path, 'r') as f:
         run_dict = json.loads(f.read())
+    network_directory = os.path.join(run_dict['run_directory'], 'network')
+    os.makedirs(network_directory, exist_ok=True)
 
     download_data(run_dict)
     gdb2sql(run_dict)
@@ -318,7 +320,6 @@ def get_reaches(meta_path, target_length=1000):
     clip_to_study_area(run_dict)
 
     print('Cleaning up')
-    network_directory = os.path.join(run_dict['run_directory'], 'network')
     shutil.rmtree(os.path.join(network_directory, 'NHD'))
     os.remove(os.path.join(network_directory, 'NHD.zip'))
 
