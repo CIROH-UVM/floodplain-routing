@@ -20,7 +20,7 @@ ERROR_DICT = {k: np.nan for k in FEATURE_NAMES}
 ### PARSING ###
 parser = argparse.ArgumentParser(description='Extract EDZ features from reach-scale geometry.')
 parser.add_argument('meta_path', type=str, help='Path to run_metadata.json for this run.')
-parser.add_argument('-plot', type=bool, help='Whether to generate diagnostic plots (optional)', required=False)
+parser.add_argument('-plot', type=bool, default=False, help='Whether to generate diagnostic plots (optional)', required=False)
 parser.add_argument('-subset', type=list, help='List of reaches to analyze (optional)', required=False)
 
 
