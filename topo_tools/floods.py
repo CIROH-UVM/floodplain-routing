@@ -184,24 +184,26 @@ def analyze_floods(meta_path, magnitudes=None, durations=None, q_method='1-chann
         run_dict = json.loads(f.read())
 
     # Load EDZ data
-    feature_data = pd.read_csv(run_dict['analysis_path'])
+    feautre_path = os.path.join(run_dict['run_directory'], 'analysis', 'data.csv')
+    feature_data = pd.read_csv(feautre_path)
     feature_data[run_dict['id_field']] = feature_data[run_dict['id_field']].astype(str)
     feature_data = feature_data.set_index(run_dict['id_field'])
 
     # Load reaches metadata
-    reaches = pd.read_csv(run_dict['reach_meta_path'])
+    meta_path = os.path.join(run_dict['run_directory'], 'network', 'reach_data.csv')
+    reaches = pd.read_csv(meta_path)
     reaches[run_dict['id_field']] = reaches[run_dict['id_field']].astype(str)
     reaches = reaches.set_index(run_dict['id_field'])
     units = reaches[run_dict['unit_field']].unique()
 
     # Load geometry
-    el = pd.read_csv(os.path.join(run_dict['geometry_directory'], 'el.csv'))
-    area = pd.read_csv(os.path.join(run_dict['geometry_directory'], 'area.csv'))
-    volume = pd.read_csv(os.path.join(run_dict['geometry_directory'], 'vol.csv'))
-    radius = pd.read_csv(os.path.join(run_dict['geometry_directory'], 'rh.csv'))
-    perimeter = pd.read_csv(os.path.join(run_dict['geometry_directory'], 'p.csv'))
-    if os.path.exists(os.path.join(run_dict['geometry_directory'], 'mannings.csv')):
-        mannings = pd.read_csv(os.path.join(run_dict['geometry_directory'], 'mannings.csv'))
+    el = pd.read_csv(os.path.join(run_dict['run_directory'], 'geometry', 'el.csv'))
+    area = pd.read_csv(os.path.join(run_dict['run_directory'], 'geometry', 'area.csv'))
+    volume = pd.read_csv(os.path.join(run_dict['run_directory'], 'geometry', 'vol.csv'))
+    radius = pd.read_csv(os.path.join(run_dict['run_directory'], 'geometry', 'rh.csv'))
+    perimeter = pd.read_csv(os.path.join(run_dict['run_directory'], 'geometry', 'p.csv'))
+    if os.path.exists(os.path.join(run_dict['run_directory'], 'geometry', 'mannings.csv')):
+        mannings = pd.read_csv(os.path.join(run_dict['run_directory'], 'geometry', 'mannings.csv'))
     else:
         mannings = pd.DataFrame(index=el.index, columns=el.columns, dtype=float)   
         mannings[:] = float(0.095)
@@ -284,7 +286,7 @@ def analyze_floods(meta_path, magnitudes=None, durations=None, q_method='1-chann
         print(f'Completed processing {unit} in {round((time.perf_counter() - t1) / 60, 1)} minutes')
         print('='*50)
 
-    out_path = os.path.join(run_dict['analysis_directory'], 'flood_metrics.csv')
+    out_path = os.path.join(run_dict['run_directory'], 'analysis', 'flood_metrics.csv')
     out_df.to_csv(out_path)
 
 
