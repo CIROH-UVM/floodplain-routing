@@ -26,6 +26,7 @@ def make_run_template(base_directory='/path/to/data', run_id='1'):
     with open(meta_path, 'w') as f:
         json.dump(run_metadata, f, indent=4)
 
+    return meta_path
 
 if __name__ == '__main__':
     args = parser.parse_args()

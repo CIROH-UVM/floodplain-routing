@@ -5,7 +5,7 @@ import time
 import numpy as np
 import pandas as pd
 import geopandas as gpd
-from utilities import build_raster, merge_rasters, merge_polygons
+from topo_tools.utilities import build_raster, merge_rasters, merge_polygons
 
 
 def map_edzs(meta_path):

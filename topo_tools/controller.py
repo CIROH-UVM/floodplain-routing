@@ -5,7 +5,7 @@ import time
 import pandas as pd
 import numpy as np
 import json
-from utilities import subunit_hydraulics, add_bathymetry, nwm_subunit
+from topo_tools.utilities import subunit_hydraulics, add_bathymetry, nwm_subunit
 
 GEOMETRY_FIELDS = ['el', 'area', 'vol', 'p', 'rh', 'rh_prime']
 

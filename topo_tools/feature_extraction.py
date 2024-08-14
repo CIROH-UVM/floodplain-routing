@@ -9,7 +9,8 @@ import matplotlib.pyplot as plt
 import json
 
 # Load regressions
-with open('source/regressions.json') as in_file:
+reg_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'regressions.json')
+with open(reg_path) as in_file:
     REGRESSIONS = json.load(in_file)
 
 FEATURE_NAMES = ['length', 'slope', 'DASqKm', 'wbody', 'ave_rhp', 'stdev_rhp', 'Ave_Rh', 'cumulative_volume', 'cumulative_height', 'valley_confinement', 'el_bathymetry', 'el_edap', 'el_min', 'el_edep', 'el_bathymetry_scaled', 'el_edap_scaled', 'el_min_scaled', 'el_edep_scaled', 'height', 'height_scaled', 'vol', 'vol_scaled', 'min_rhp', 'slope_start_min', 'slope_min_stop', 'rh_bottom', 'rh_edap', 'rh_min', 'rh_edep', 'w_bottom', 'w_edap', 'w_min', 'w_edep', 'w_edap_scaled', 'w_edep_scaled', 'edz_count', 'min_loc_ratio', 'rhp_pre', 'rhp_post', 'rhp_post_stdev', 'invalid_geometry', 'regression_valley_confinement', 'streamorder']
