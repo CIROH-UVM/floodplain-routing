@@ -6,3 +6,5 @@
 4. [Extracting Features of the Energy Dissipation Zone (EDZ)](4-Feature_Extraction.md)
 5. [Flood-specific Information](5-Flood_Metrics.md)
 6. [Making Maps](6-Mapping.md)
+
+One Python script with the full workflow: [full_workflow.py](full_workflow.py)
