@@ -12,14 +12,16 @@ def map_edzs(meta_path):
     # Load run config
     with open(meta_path, 'r') as f:
         run_dict = json.loads(f.read())
+    reach_path = os.path.join(run_dict['run_directory'], 'network', 'catchments.shp')
 
     # Load EDZ data
-    feature_data = pd.read_csv(run_dict['analysis_path'])
+    feature_data = pd.read_csv(os.path.join(run_dict['run_directory'], 'analysis', 'data.csv'))
     feature_data[run_dict['id_field']] = feature_data[run_dict['id_field']].astype(str)
     feature_data = feature_data.set_index(run_dict['id_field'])
 
     # Load reaches/basins to run
-    reaches = pd.read_csv(run_dict['reach_meta_path'])
+    meta_path = os.path.join(run_dict['run_directory'], 'network', 'reach_data.csv')
+    reaches = pd.read_csv(meta_path)
     reaches[run_dict['id_field']] = reaches[run_dict['id_field']].astype(str)
     reaches[run_dict['subunit_field']] = reaches[run_dict['subunit_field']].astype(str).str.rjust(4, '0')
     reaches = reaches.set_index(run_dict['id_field'])
@@ -55,7 +57,7 @@ def map_edzs(meta_path):
                     edz_dict = {'label': 'edz', 'min_el': reach_data.loc[r, 'el_edap'], 'max_el': reach_data.loc[r, 'el_edep']}
                     reach_dict[r] = {'ID': r, 'zones': [ch_dict, edz_dict]}
 
-            build_raster(hand_path, run_dict["reach_path"], run_dict["id_field"], reach_dict, 'edz')
+            build_raster(hand_path, reach_path, run_dict["id_field"], reach_dict, 'edz')
 
             out_raster_path = os.path.join(os.path.dirname(hand_path), 'edz.tif')
             out_rasters.append(out_raster_path)
@@ -65,23 +67,25 @@ def map_edzs(meta_path):
         print(f'Completed processing {unit} in {round((time.perf_counter() - t1) / 60, 1)} minutes')
         print('='*50)
 
-    out_path = os.path.join(run_dict['analysis_directory'], 'edz.tif')
+    out_path = os.path.join(run_dict['run_directory'], 'analysis', 'edz.tif')
     merge_rasters(out_rasters, out_path)
-    out_path = os.path.join(run_dict['analysis_directory'], 'edz.shp')
+    out_path = os.path.join(run_dict['run_directory'], 'analysis', 'edz.shp')
     merge_polygons(out_polys, out_path)
 
 def map_floodplain(meta_path, magnitude):
     # Load run config
     with open(meta_path, 'r') as f:
         run_dict = json.loads(f.read())
+    reach_path = os.path.join(run_dict['run_directory'], 'network', 'catchments.shp')
 
     # Load flood data
-    flood_data = pd.read_csv(os.path.join(run_dict['analysis_directory'], 'flood_metrics.csv'))
+    flood_data = pd.read_csv(os.path.join(run_dict['run_directory'], 'analysis', 'flood_metrics.csv'))
     flood_data[run_dict['id_field']] = flood_data[run_dict['id_field']].astype(str)
     flood_data = flood_data.set_index(run_dict['id_field'])
 
     # Load reaches/basins to run
-    reaches = pd.read_csv(run_dict['reach_meta_path'])
+    meta_path = os.path.join(run_dict['run_directory'], 'network', 'reach_data.csv')
+    reaches = pd.read_csv(meta_path)
     reaches[run_dict['id_field']] = reaches[run_dict['id_field']].astype(str)
     reaches[run_dict['subunit_field']] = reaches[run_dict['subunit_field']].astype(str).str.rjust(4, '0')
     reaches = reaches.set_index(run_dict['id_field'])
@@ -115,7 +119,7 @@ def map_floodplain(meta_path, magnitude):
                 reach_dict[r] = {'ID': r, 'zones': [mag_dict]}
             
 
-            build_raster(hand_path, run_dict["reach_path"], run_dict["id_field"], reach_dict, magnitude)
+            build_raster(hand_path, reach_path, run_dict["id_field"], reach_dict, magnitude)
 
             out_raster_path = os.path.join(os.path.dirname(hand_path), f'{magnitude}.tif')
             out_rasters.append(out_raster_path)
@@ -126,9 +130,9 @@ def map_floodplain(meta_path, magnitude):
         print(f'Completed processing {unit} in {round((time.perf_counter() - t1) / 60, 1)} minutes')
         print('='*50)
 
-    out_path = os.path.join(run_dict['analysis_directory'], f'{magnitude}.tif')
+    out_path = os.path.join(run_dict['run_directory'], 'analysis', f'{magnitude}.tif')
     merge_rasters(out_rasters, out_path)
-    out_path = os.path.join(run_dict['analysis_directory'], f'{magnitude}.shp')
+    out_path = os.path.join(run_dict['run_directory'], 'analysis', f'{magnitude}.shp')
     merge_polygons(out_polys, out_path)
 
 

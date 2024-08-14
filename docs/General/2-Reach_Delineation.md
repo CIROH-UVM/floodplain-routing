@@ -4,7 +4,7 @@ The UVM workflow utilizes the NHDPlus-HR dataset for reach direct-drainage dilin
 
 NHDPlus-Hr delineations can be very small at times, so these scripts include functions to "refactor" the network to a target reach length.  For this example, we'll use a target reach length of 1km.
 
-## Running the scripts
+## Running the script
 
 From a shell command
 

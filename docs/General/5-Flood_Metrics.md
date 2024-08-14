@@ -45,16 +45,22 @@ The 2-channel and 3-channel options are inspired by the work of Matt et al. (202
 Help for this command may be obtained by running the following command
 
 ```console
-python source/floods.py -h
+python topo_tools/floods.py -h
 ```
 
 Example run command
 
 ```console
-python source/floods.py /path/to/run_metadata.json ['Q2','Q100'], ['Short','Medium','Long']
+python topo_tools/floods.py /path/to/run_metadata.json ['Q2','Q100'], ['Short','Medium','Long']
 ```
 
 or import the analyze_floods function from floods.py into your python script.
+
+```python
+from topo_tools import analyze_floods
+
+analyze_floods(meta_path)
+```
 
 If no magnitudes or durations are provided, the script will run all hydrographs listed in the 'durations' dictionary of regressions.json.
 
