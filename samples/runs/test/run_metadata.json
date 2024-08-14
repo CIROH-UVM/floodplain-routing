@@ -1,0 +1,11 @@
+{
+    "data_directory": "/netfiles/ciroh/slawson/topo_extract_docs/sample_data",
+    "run_directory": "/netfiles/ciroh/slawson/topo_extract_docs/sample_data/runs/test",
+    "id_field": "UVM_ID",
+    "unit_field": "8_name",
+    "subunit_field": "12_code",
+    "scaled_stages": true,
+    "huc4": "0430",
+    "subunit_path": "/netfiles/ciroh/slawson/topo_extract_docs/sample_data/shared/subunits.shp",
+    "geometry_source": "HAND"
+}
