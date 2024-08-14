@@ -307,7 +307,7 @@ def clip_to_study_area(run_dict, water_toggle=0.05):
     meta = meta.merge(wbody_intersect[[run_dict["id_field"], 'wbody']], on=run_dict["id_field"], how='left').fillna(False)
     meta.to_csv(reach_meta_path, index=False)
 
-def run_all(meta_path, target_length=1000):
+def get_reaches(meta_path, target_length=1000):
     # Load run config and initialize directory structure
     with open(meta_path, 'r') as f:
         run_dict = json.loads(f.read())
@@ -325,4 +325,4 @@ def run_all(meta_path, target_length=1000):
 
 if __name__ == '__main__':
     args = parser.parse_args()
-    run_all(args.meta_path, args.length)
+    get_reaches(args.meta_path, args.length)
