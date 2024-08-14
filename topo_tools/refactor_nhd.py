@@ -26,6 +26,7 @@ NAME_DICT = {
 ### PARSING ###
 parser = argparse.ArgumentParser(description='Download NHD for HUC4 of interest and refactor.')
 parser.add_argument('meta_path', type=str, help='Path to run_metadata.json for this run.')
+parser.add_argument('--length', type=int, default=1000, help='Target length for reach merging.')
 
 def download_data(run_dict):
     network_directory = os.path.join(run_dict['run_directory'], 'network')
@@ -306,14 +307,14 @@ def clip_to_study_area(run_dict, water_toggle=0.05):
     meta = meta.merge(wbody_intersect[[run_dict["id_field"], 'wbody']], on=run_dict["id_field"], how='left').fillna(False)
     meta.to_csv(reach_meta_path, index=False)
 
-def run_all(meta_path):
+def run_all(meta_path, target_length=1000):
     # Load run config and initialize directory structure
     with open(meta_path, 'r') as f:
         run_dict = json.loads(f.read())
 
     download_data(run_dict)
     gdb2sql(run_dict)
-    merge_reaches(run_dict, agg_method='length', merge_thresh=1000)
+    merge_reaches(run_dict, agg_method='length', merge_thresh=target_length)
     clip_to_study_area(run_dict)
 
     print('Cleaning up')
@@ -324,4 +325,4 @@ def run_all(meta_path):
 
 if __name__ == '__main__':
     args = parser.parse_args()
-    run_all(args.meta_path)
+    run_all(args.meta_path, args.length)
