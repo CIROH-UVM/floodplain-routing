@@ -86,6 +86,7 @@ class ReachPlot:
             params = REGRESSIONS['peak_flowrate'][reg]
             q_ri = (params[0] * ((self.da / 2.59) ** params[1])) / 35.3147
             norm_stage = np.interp(q_ri, q, self.el)
+            norm_stage = min(norm_stage, 6)
 
             self.section_ax.axhline(norm_stage, c='c', alpha=0.3, ls='dashed')
             self.section_ax.text(min(self.width), norm_stage, reg, horizontalalignment='left', verticalalignment='bottom', fontsize='xx-small')
