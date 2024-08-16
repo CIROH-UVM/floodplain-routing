@@ -16,7 +16,7 @@ extract_geometry(meta_path)
 batch_add_bathymetry(meta_path)
 
 # Extract features
-extract_features(meta_path)
+extract_features(meta_path, plot=True)
 
 # Analyze floods
 analyze_floods(meta_path)
