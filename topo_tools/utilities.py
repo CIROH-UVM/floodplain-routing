@@ -279,22 +279,23 @@ def add_bathymetry(geom, da, slope):
     ds = stage_space[1:] - stage_space[:-1]
     dp = np.sqrt((dw ** 2) + (ds ** 2))
     dp = np.insert(dp, 0, dp[0])
+    dp = np.cumsum(dp)
 
-    # Assume rectangular channel
-    area = (stage_space * top_width)
+    area = (stage_space * ((bottom_width + width_space) / 2))
     perimeter = (bottom_width + (2 * dp))
 
-    flowrate_space = (1 / n) * (stage_space * top_width) * (slope ** 0.5) * ((area / perimeter) ** (2 / 3))
+    flowrate_space = (1 / n) * (area) * (slope ** 0.5) * ((area / perimeter) ** (2 / 3))
     channel_ind = np.argmax(flowrate_space > flowrate)
     channel_ind = max(channel_ind, filter_arg)  # need at least two points of bathy for a square.  Need at least 0.025m to replace cut out
 
     stage_space = stage_space[:channel_ind]
+    width = width_space[:channel_ind]
     area = area[:channel_ind]
     perimeter = perimeter[:channel_ind]
     area_diff = geom['area'][filter_arg] - top_width
 
     geom['area'] = geom['area'][filter_arg:]
-    geom['area'] = np.insert(geom['area'], 0, np.repeat(top_width, channel_ind))
+    geom['area'] = np.insert(geom['area'], 0, width)
     geom['area'] = geom['area'][:dim]
 
     geom['el'] -= geom['el'][filter_arg - 1]  # first data point should be at top of bathymetry
