@@ -174,7 +174,8 @@ class Reach:
             'vol_edz': vol_edz,
             'peak_stage': peak_stage,
             'peak_stage_scaled': peak_stage_scaled,
-            'volume_conservation': volume_conservation
+            'volume_conservation': volume_conservation,
+            'peak_exceeds_rc': False
         }
         return metrics
 
@@ -217,8 +218,9 @@ def analyze_floods(meta_path, magnitudes=None, durations=None, q_method='1-chann
         durations = list(set([x.split('_')[1] for x in available_regressions if x.split('_')[0] in magnitudes]))
 
     # Make an empty dataframe to store results
-    metric_list = ['event_volume', 'event_volume_ch', 'event_volume_edz', 'event_ssp', 'event_ssp_ch', 'event_ssp_edz', 'tw_sec', 'tw_ch', 'tw_edz', 'area_sec', 'area_ch', 'area_edz', 'vol_sec', 'vol_ch', 'vol_edz', 'peak_stage', 'peak_stage_scaled', 'volume_conservation']
+    metric_list = ['event_volume', 'event_volume_ch', 'event_volume_edz', 'event_ssp', 'event_ssp_ch', 'event_ssp_edz', 'tw_sec', 'tw_ch', 'tw_edz', 'area_sec', 'area_ch', 'area_edz', 'vol_sec', 'vol_ch', 'vol_edz', 'peak_stage', 'peak_stage_scaled', 'volume_conservation', 'peak_exceeds_rc']
     all_metrics = [f'{magnitude}_{duration}_{metric}' for magnitude in magnitudes for duration in durations for metric in metric_list]
+    all_metrics.append('geom_error')
     out_df = pd.DataFrame(index=feature_data.index, columns=all_metrics)
 
     # Process units
@@ -252,7 +254,10 @@ def analyze_floods(meta_path, magnitudes=None, durations=None, q_method='1-chann
                 # error catching
                 if np.all(tmp_area < 1):
                     out_df.loc[reach, :] = np.nan
+                    out_df.loc[reach, 'geom_error'] = True
                     continue
+                else:
+                    out_df.loc[reach, 'geom_error'] = False
 
                 # get EDZ info
                 tmp_edap = feature_data.loc[reach, 'el_edap']
@@ -278,6 +283,7 @@ def analyze_floods(meta_path, magnitudes=None, durations=None, q_method='1-chann
                         if tmp_metrics is None:
                             metric_subset = [f'{magnitude}_{duration}_{metric}' for metric in metric_list]
                             out_df.loc[reach, metric_subset] = np.nan
+                            out_df.loc[reach, f'{magnitude}_{duration}_peak_exceeds_rc'] = True
                         else:
                             for metric in tmp_metrics.keys():
                                 out_df.loc[reach, f'{magnitude}_{duration}_{metric}'] = tmp_metrics[metric]
