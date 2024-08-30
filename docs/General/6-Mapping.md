@@ -7,7 +7,7 @@ Scripts are available to generate raster and shapefile extents of the EDZ as wel
 From a shell command, you may generate all recurrence interval maps and the EDZ map in one go.
 
 ```console
-python topo_tools/map_tools.py "path/to/run_metadata.json" 
+python -m topo_tools.map_tools "path/to/run_metadata.json" 
 ```
 
 From python, you have more control over what you map.  Adjust the code below as necessary.
