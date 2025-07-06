@@ -394,7 +394,7 @@ def extract_features(run_path, plot=False, subset=None):
         wtod_bf = bkf_w / bkf_s
 
         bkf_w_reg = 13.0 * ((tmp_meta['TotDASqKm'] * 0.386102) ** 0.448)  # Underwood et al. 2021 VT regression  # 3.12 * (tmp_meta['TotDASqKm'] ** 0.415)  # Bieger et al. 2015 App. Highlands regression
-        regression_valley_confinement = q500_w / bkf_w_reg
+        regression_valley_confinement = q500_w / bkf_w
 
         # Generate general stats
         edz_count = len(edzs)
@@ -428,7 +428,7 @@ def extract_features(run_path, plot=False, subset=None):
         else:
             main_edz_ind = [i for v, i in sorted(zip(edz_vols, edzs.keys()), reverse=True)][0]
             main_edz = edzs[main_edz_ind]
-            valley_confinement = main_edz['w_edep'] / bkf_w  # main_edz['w_edap']
+            valley_confinement = main_edz['w_edep'] / main_edz['w_edap']
             min_loc_ratio = (main_edz['min_el'] - main_edz['start_el']) / main_edz['height']
             rhp_pre = tmp_rh_prime[:main_edz['start_ind']].mean()
             rhp_post = tmp_rh_prime[main_edz['stop_ind']:].mean()
