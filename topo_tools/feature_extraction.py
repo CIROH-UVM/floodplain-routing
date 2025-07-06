@@ -13,7 +13,7 @@ reg_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'regressions
 with open(reg_path) as in_file:
     REGRESSIONS = json.load(in_file)
 
-FEATURE_NAMES = ['length', 'slope', 'DASqKm', 'wbody', 'ave_rhp', 'stdev_rhp', 'Ave_Rh', 'cumulative_volume', 'cumulative_height', 'valley_confinement', 'el_bathymetry', 'el_edap', 'el_min', 'el_edep', 'el_bathymetry_scaled', 'el_edap_scaled', 'el_min_scaled', 'el_edep_scaled', 'height', 'height_scaled', 'vol', 'vol_scaled', 'min_rhp', 'slope_start_min', 'slope_min_stop', 'rh_bottom', 'rh_edap', 'rh_min', 'rh_edep', 'w_bottom', 'w_edap', 'w_min', 'w_edep', 'w_edap_scaled', 'w_edep_scaled', 'edz_count', 'min_loc_ratio', 'rhp_pre', 'rhp_post', 'rhp_post_stdev', 'invalid_geometry', 'regression_valley_confinement', 'streamorder']
+FEATURE_NAMES = ['length', 'slope', 'DASqKm', 'wbody', 'ave_rhp', 'stdev_rhp', 'Ave_Rh', 'cumulative_volume', 'cumulative_height', 'valley_confinement', 'el_bathymetry', 'el_edap', 'el_min', 'el_edep', 'el_bathymetry_scaled', 'el_edap_scaled', 'el_min_scaled', 'el_edep_scaled', 'height', 'height_scaled', 'vol', 'vol_scaled', 'min_rhp', 'slope_start_min', 'slope_min_stop', 'rh_bottom', 'rh_edap', 'rh_min', 'rh_edep', 'w_bottom', 'w_edap', 'w_min', 'w_edep', 'w_edap_scaled', 'w_edep_scaled', 'edz_count', 'min_loc_ratio', 'rhp_pre', 'rhp_post', 'rhp_post_stdev', 'invalid_geometry', 'regression_valley_confinement', 'streamorder', 'rh_pre', 'rh_post']
 ERROR_ARRAY = [np.nan for i in FEATURE_NAMES]
 ERROR_DICT = {k: np.nan for k in FEATURE_NAMES}
 
@@ -175,6 +175,8 @@ def get_edzs(el, el_scaled, rh, rh_prime, widths, thresh=0.5, max_stage=2.5):
         rh_edap = rh[start]
         rh_min = rh[argmin]
         rh_edep = rh[stop]
+        rh_pre = rh[:start].mean()
+        rh_post = rh[stop:].mean()
 
         w_bottom = widths[max(bathymetry_break - 1, 0)]
         w_edap = widths[start]
@@ -202,6 +204,8 @@ def get_edzs(el, el_scaled, rh, rh_prime, widths, thresh=0.5, max_stage=2.5):
             'rh_edap': rh_edap,
             'rh_min': rh_min,
             'rh_edep': rh_edep,
+            'rh_pre': rh_pre,
+            'rh_post': rh_post,
             'w_bottom': w_bottom,
             'w_edap': w_edap,
             'w_min': w_min,
@@ -445,6 +449,8 @@ def extract_features(run_path, plot=False, subset=None):
             features.loc[reach, 'rh_edap'] = main_edz['rh_edap']
             features.loc[reach, 'rh_min'] = main_edz['rh_min']
             features.loc[reach, 'rh_edep'] = main_edz['rh_edep']
+            features.loc[reach, 'rh_pre'] = main_edz['rh_pre']
+            features.loc[reach, 'rh_post'] = main_edz['rh_post']
             features.loc[reach, 'w_bottom'] = main_edz['w_bottom']
             features.loc[reach, 'w_edap'] = main_edz['w_edap']
             features.loc[reach, 'w_min'] = main_edz['w_min']
