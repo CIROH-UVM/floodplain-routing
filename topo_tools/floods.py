@@ -244,7 +244,10 @@ def analyze_floods(meta_path, magnitudes=None, durations=None, q_method='1-chann
                 tmp_da = reaches.loc[reach, 'TotDASqKm']
                 tmp_slope = reaches.loc[reach, 'slope']
                 tmp_length = reaches.loc[reach, 'length']
-                tmp_el = el[reach]
+                try:
+                    tmp_el = el[reach]
+                except:
+                    continue
                 tmp_area = area[reach] / tmp_length
                 tmp_volume = volume[reach] / tmp_length
                 tmp_p = perimeter[reach] / tmp_length

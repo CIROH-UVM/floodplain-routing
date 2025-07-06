@@ -57,7 +57,10 @@ def map_edzs(meta_path):
                     edz_dict = {'label': 'edz', 'min_el': reach_data.loc[r, 'el_edap'], 'max_el': reach_data.loc[r, 'el_edep']}
                     reach_dict[r] = {'ID': r, 'zones': [ch_dict, edz_dict]}
 
-            build_raster(hand_path, reach_path, run_dict["id_field"], reach_dict, 'edz')
+            try:
+                build_raster(hand_path, reach_path, run_dict["id_field"], reach_dict, 'edz')
+            except:
+                continue
 
             out_raster_path = os.path.join(os.path.dirname(hand_path), 'edz.tif')
             out_rasters.append(out_raster_path)
@@ -119,7 +122,10 @@ def map_floodplain(meta_path, magnitude):
                 reach_dict[r] = {'ID': r, 'zones': [mag_dict]}
             
 
-            build_raster(hand_path, reach_path, run_dict["id_field"], reach_dict, magnitude)
+            try:
+                build_raster(hand_path, reach_path, run_dict["id_field"], reach_dict, magnitude)
+            except:
+                continue
 
             out_raster_path = os.path.join(os.path.dirname(hand_path), f'{magnitude}.tif')
             out_rasters.append(out_raster_path)
@@ -170,6 +176,6 @@ def merge_subbasins(meta_path, file_name):
 
 if __name__ == '__main__':
     meta_path = sys.argv[1]
-    for m in ['Q2', 'Q5', 'Q10','Q25', 'Q50', 'Q100', 'Q200', 'Q500']:
-        map_floodplain(meta_path, m)
+    #for m in ['Q2', 'Q5', 'Q10','Q25', 'Q50', 'Q100', 'Q200', 'Q500']:
+    #    map_floodplain(meta_path, m)
     map_edzs(meta_path)

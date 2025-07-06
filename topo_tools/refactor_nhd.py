@@ -11,7 +11,7 @@ import pandas as pd
 import json
 from collections import defaultdict
 
-OGR_PATH = os.path.join(sys.prefix, 'bin', 'ogr2ogr')
+OGR_PATH = '/usr/bin/ogr2ogr'  # os.path.join(sys.prefix, 'bin', 'ogr2ogr')
 MANUAL_OVERRIDE = {'60000200057445': '4300102000489',
                    '60000200063685': '4300102000489'}
 NAME_DICT = {

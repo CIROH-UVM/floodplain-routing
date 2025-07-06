@@ -461,7 +461,7 @@ def extract_features(run_path, plot=False, subset=None):
             reach_plot.add_geometry(tmp_el_scaled, tmp_area, tmp_rh, tmp_rh_prime, ave)
             reach_plot.add_edzs(edzs, main_edz)
             q = (1 / np.repeat(0.07, len(tmp_el))) * tmp_volume * (tmp_rh ** (2 / 3)) * (tmp_meta['slope'] ** 0.5)
-            reach_plot.add_aeps(q)
+            # reach_plot.add_aeps(q)
             reach_plot.save()
 
     print(f'{len(valid_reaches)} / {len(valid_reaches)} reaches processed')
