@@ -13,7 +13,7 @@ reg_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'regressions
 with open(reg_path) as in_file:
     REGRESSIONS = json.load(in_file)
 
-FEATURE_NAMES = ['length', 'slope', 'DASqKm', 'wbody', 'ave_rhp', 'stdev_rhp', 'Ave_Rh', 'cumulative_volume', 'cumulative_height', 'valley_confinement', 'el_bathymetry', 'el_edap', 'el_min', 'el_edep', 'el_bathymetry_scaled', 'el_edap_scaled', 'el_min_scaled', 'el_edep_scaled', 'height', 'height_scaled', 'vol', 'vol_scaled', 'min_rhp', 'slope_start_min', 'slope_min_stop', 'rh_bottom', 'rh_edap', 'rh_min', 'rh_edep', 'w_bottom', 'w_edap', 'w_min', 'w_edep', 'w_edap_scaled', 'w_edep_scaled', 'edz_count', 'min_loc_ratio', 'rhp_pre', 'rhp_post', 'rhp_post_stdev', 'invalid_geometry', 'regression_valley_confinement', 'streamorder', 'rh_pre', 'rh_post']
+FEATURE_NAMES = ['length', 'slope', 'DASqKm', 'wbody', 'ave_rhp', 'stdev_rhp', 'Ave_Rh', 'cumulative_volume', 'cumulative_height', 'valley_confinement', 'el_bathymetry', 'el_edap', 'el_min', 'el_edep', 'el_bathymetry_scaled', 'el_edap_scaled', 'el_min_scaled', 'el_edep_scaled', 'height', 'height_scaled', 'vol', 'vol_scaled', 'min_rhp', 'slope_start_min', 'slope_min_stop', 'rh_bottom', 'rh_edap', 'rh_min', 'rh_edep', 'w_bottom', 'w_edap', 'w_min', 'w_edep', 'w_edap_scaled', 'w_edep_scaled', 'edz_count', 'min_loc_ratio', 'rhp_pre', 'rhp_post', 'rhp_post_stdev', 'invalid_geometry', 'regression_valley_confinement', 'streamorder', 'rh_pre', 'rh_post', 'wtod_bf']
 ERROR_ARRAY = [np.nan for i in FEATURE_NAMES]
 ERROR_DICT = {k: np.nan for k in FEATURE_NAMES}
 
@@ -387,8 +387,14 @@ def extract_features(run_path, plot=False, subset=None):
             q100_ind = len(q) - 1
         q500_w = tmp_area[q500_ind]
         q100_w = tmp_area[q100_ind]
-        bkf_w = 13.0 * ((tmp_meta['TotDASqKm'] * 0.386102) ** 0.448)  # Underwood et al. 2021 VT regression  # 3.12 * (tmp_meta['TotDASqKm'] ** 0.415)  # Bieger et al. 2015 App. Highlands regression
-        regression_valley_confinement = q500_w / bkf_w
+
+        bkf_ind = np.argmin(np.abs(1.0 - tmp_el_scaled))
+        bkf_s = tmp_el[bkf_ind]
+        bkf_w = tmp_area[bkf_ind]
+        wtod_bf = bkf_w / bkf_s
+
+        bkf_w_reg = 13.0 * ((tmp_meta['TotDASqKm'] * 0.386102) ** 0.448)  # Underwood et al. 2021 VT regression  # 3.12 * (tmp_meta['TotDASqKm'] ** 0.415)  # Bieger et al. 2015 App. Highlands regression
+        regression_valley_confinement = q500_w / bkf_w_reg
 
         # Generate general stats
         edz_count = len(edzs)
@@ -421,7 +427,7 @@ def extract_features(run_path, plot=False, subset=None):
         else:
             main_edz_ind = [i for v, i in sorted(zip(edz_vols, edzs.keys()), reverse=True)][0]
             main_edz = edzs[main_edz_ind]
-            valley_confinement = main_edz['w_edep'] / main_edz['w_edap']
+            valley_confinement = main_edz['w_edep'] / bkf_w  # main_edz['w_edap']
             min_loc_ratio = (main_edz['min_el'] - main_edz['start_el']) / main_edz['height']
             rhp_pre = tmp_rh_prime[:main_edz['start_ind']].mean()
             rhp_post = tmp_rh_prime[main_edz['stop_ind']:].mean()
