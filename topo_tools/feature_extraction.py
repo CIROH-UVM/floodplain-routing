@@ -416,6 +416,7 @@ def extract_features(run_path, plot=False, subset=None):
         features.loc[reach, 'q500_w'] = q500_w
         features.loc[reach, 'q100_w'] = q100_w
         features.loc[reach, 'invalid_geometry'] = 0
+        features.loc[reach, 'WtoD_bf'] = wtod_bf
         if edz_count == 0:
             features.loc[reach, 'cumulative_volume'] = 0
             features.loc[reach, 'cumulative_height'] = 0
