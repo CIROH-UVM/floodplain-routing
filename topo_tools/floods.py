@@ -154,7 +154,7 @@ class Reach:
         vol_sec = vol_ch + vol_edz + vol_fp
 
         peak_stage = np.interp(q_vals.max(), self.discharge, self.el)
-        peak_stage_scaled = peak_stage / (0.907 * ((self.da * 0.386102) ** 0.331))  # (0.26 * (self.da ** 0.287))
+        peak_stage_scaled = peak_stage / ((0.907 * 0.3048) * ((self.da * 0.386102) ** 0.331))  # (0.26 * (self.da ** 0.287))
 
         metrics = {
             'event_volume': event_volume,

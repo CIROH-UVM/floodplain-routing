@@ -393,7 +393,7 @@ def extract_features(run_path, plot=False, subset=None):
         bkf_w = tmp_area[bkf_ind]
         wtod_bf = bkf_w / bkf_s
 
-        bkf_w_reg = 13.0 * ((tmp_meta['TotDASqKm'] * 0.386102) ** 0.448)  # Underwood et al. 2021 VT regression  # 3.12 * (tmp_meta['TotDASqKm'] ** 0.415)  # Bieger et al. 2015 App. Highlands regression
+        bkf_w_reg = (13.0 * 0.3048) * ((tmp_meta['TotDASqKm'] * 0.386102) ** 0.448)  # Underwood et al. 2021 VT regression  # 3.12 * (tmp_meta['TotDASqKm'] ** 0.415)  # Bieger et al. 2015 App. Highlands regression
         regression_valley_confinement = q500_w / bkf_w
 
         # Generate general stats
@@ -462,8 +462,8 @@ def extract_features(run_path, plot=False, subset=None):
             features.loc[reach, 'w_edap'] = main_edz['w_edap']
             features.loc[reach, 'w_min'] = main_edz['w_min']
             features.loc[reach, 'w_edep'] = main_edz['w_edep']
-            features.loc[reach, 'w_edap_scaled'] = main_edz['w_edap'] / (13.0 * ((tmp_meta['TotDASqKm'] * 0.386102) ** 0.448))  # (3.12 * (tmp_meta['TotDASqKm'] ** 0.415))
-            features.loc[reach, 'w_edep_scaled'] = main_edz['w_edep'] / (13.0 * ((tmp_meta['TotDASqKm'] * 0.386102) ** 0.448))  # (3.12 * (tmp_meta['TotDASqKm'] ** 0.415))
+            features.loc[reach, 'w_edap_scaled'] = main_edz['w_edap'] / ((13.0 * 0.3048) * ((tmp_meta['TotDASqKm'] * 0.386102) ** 0.448))  # (3.12 * (tmp_meta['TotDASqKm'] ** 0.415))
+            features.loc[reach, 'w_edep_scaled'] = main_edz['w_edep'] / ((13.0 * 0.3048) * ((tmp_meta['TotDASqKm'] * 0.386102) ** 0.448))  # (3.12 * (tmp_meta['TotDASqKm'] ** 0.415))
             features.loc[reach, 'edz_count'] = edz_count
             features.loc[reach, 'min_loc_ratio'] = min_loc_ratio
             features.loc[reach, 'rhp_pre'] = rhp_pre

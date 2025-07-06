@@ -20,7 +20,7 @@ def extract_geometry(meta_path):
 
     # Set up run
     if run_dict['scaled_stages']:
-        max_stage_equation = lambda da: 6 * (0.907 * ((da * 0.386102) ** 0.331)) # Underwood et al. 2021 VT regression, drainage area in sq. miles # (0.26 * (da ** 0.287))  # Bieger et al. 2015 App Highlands regression
+        max_stage_equation = lambda da: 6 * ((0.907 * 0.3048) * ((da * 0.386102) ** 0.331)) # Underwood et al. 2021 VT regression, conversion factors for drainage area to sq. miles and feet to meters # (0.26 * (da ** 0.287))  # Bieger et al. 2015 App Highlands regression
     else:
         max_stage_equation = lambda da: 10
 
@@ -183,7 +183,7 @@ def batch_add_bathymetry(meta_path):
     
 def scale_stages(reach_data, el_data):
     el_scaled_data = el_data.copy()
-    bkf_equation = lambda da: 0.907 * ((da * 0.386102) ** 0.331)  # 0.26 * (da ** 0.287)
+    bkf_equation = lambda da: (0.907 * 0.3048) * ((da * 0.386102) ** 0.331)  # 0.26 * (da ** 0.287)
     reaches = pd.DataFrame({'ReachCode': el_data.columns.astype(str)})
     reach_data = pd.merge(reach_data, reaches, right_on='ReachCode', left_index=True, how='right')
     max_stages = bkf_equation(reach_data['TotDASqKm'].to_numpy())
