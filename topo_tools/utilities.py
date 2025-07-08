@@ -294,6 +294,8 @@ def add_bathymetry(geom, da, slope):
     perimeter = perimeter[:channel_ind]
     area_diff = geom['area'][filter_arg] - top_width
 
+    print(stage_space[-1])
+
     geom['area'] = geom['area'][filter_arg:]
     geom['area'] = np.insert(geom['area'], 0, width)
     geom['area'] = geom['area'][:dim]
