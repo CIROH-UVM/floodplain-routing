@@ -373,7 +373,7 @@ def extract_features(run_path, plot=False, subset=None):
         
         # Process
         thresh = 0.5
-        max_stage = 2.5
+        max_stage = 4  # 2.5
         
         edzs = get_edzs(tmp_el, tmp_el_scaled, tmp_rh, tmp_rh_prime, tmp_area, thresh, max_stage)
         q = (1 / 0.07) * tmp_volume * (tmp_rh ** (2 / 3)) * (tmp_meta['slope'] ** 0.5)
