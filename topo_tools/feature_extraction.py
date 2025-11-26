@@ -373,7 +373,7 @@ def extract_features(run_path, plot=False, subset=None):
         
         # Process
         thresh = 0.5
-        max_stage = 4  # 3  # 2.5
+        max_stage = 3  # 2.5
         
         edzs = get_edzs(tmp_el, tmp_el_scaled, tmp_rh, tmp_rh_prime, tmp_area, thresh, max_stage)
         q = (1 / 0.07) * tmp_volume * (tmp_rh ** (2 / 3)) * (tmp_meta['slope'] ** 0.5)
@@ -392,6 +392,7 @@ def extract_features(run_path, plot=False, subset=None):
         bkf_s = tmp_el[bkf_ind]
         bkf_w = tmp_area[bkf_ind]
         wtod_bf = bkf_w / bkf_s
+        bkf_ssp = 9.81 * 1000 * tmp_rh[bkf_ind] * tmp_meta['slope'] * ((1 / 0.07) * (tmp_rh[bkf_ind] ** 0.6667) * (tmp_meta['slope'] ** 0.5))
 
         bkf_w_reg = (13.0 * 0.3048) * ((tmp_meta['TotDASqKm'] * 0.386102) ** 0.448)  # Underwood et al. 2021 VT regression  # 3.12 * (tmp_meta['TotDASqKm'] ** 0.415)  # Bieger et al. 2015 App. Highlands regression
         regression_valley_confinement = q500_w / bkf_w
@@ -418,10 +419,13 @@ def extract_features(run_path, plot=False, subset=None):
         features.loc[reach, 'invalid_geometry'] = 0
         features.loc[reach, 'wtod_bf'] = wtod_bf
         features.loc[reach, 'w_bf'] = bkf_w
-        for i in [2,3,4,5,6]:
+        features.loc[reach, 'ssp_bf'] = bkf_ssp
+        for i in [0.5,2,3,4,5,6]:
             idx = np.argmin(np.abs(np.float64(i) - tmp_el_scaled))
             w = tmp_area[idx]
             features.loc[reach, f'w_{i}times_bf'] = w
+            ssp = 9.81 * 1000 * tmp_rh[idx] * tmp_meta['slope'] * ((1 / 0.07) * (tmp_rh[idx] ** 0.6667) * (tmp_meta['slope'] ** 0.5))
+            features.loc[reach, f'ssp_{i}times_bf'] = ssp
 
         if edz_count == 0:
             features.loc[reach, 'cumulative_volume'] = 0
