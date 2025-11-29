@@ -423,7 +423,8 @@ def extract_features(run_path, plot=False, subset=None):
         for i in [0.5,2,3,4,5,6]:
             idx = np.argmin(np.abs(np.float64(i) - tmp_el_scaled))
             w = tmp_area[idx]
-            features.loc[reach, f'w_{i}times_bf'] = w
+            features.loc[reach, f'w_{i}timesbf'] = w
+            features.loc[reach, f'w_{i}timesbf_to_w_bf'] = w / bkf_w
             ssp = 9.81 * 1000 * tmp_rh[idx] * tmp_meta['slope'] * ((1 / 0.07) * (tmp_rh[idx] ** 0.6667) * (tmp_meta['slope'] ** 0.5))
             features.loc[reach, f'ssp_{i}times_bf'] = ssp
 
@@ -438,6 +439,8 @@ def extract_features(run_path, plot=False, subset=None):
         else:
             main_edz_ind = [i for v, i in sorted(zip(edz_vols, edzs.keys()), reverse=True)][0]
             main_edz = edzs[main_edz_ind]
+            features.loc[reach, 'w_edap_to_w_bf'] = main_edz['w_edap'] / bkf_w
+            features.loc[reach, 'w_edep_to_w_bf'] = main_edz['w_edep'] / bkf_w
             valley_confinement = main_edz['w_edep'] / main_edz['w_edap']
             min_loc_ratio = (main_edz['min_el'] - main_edz['start_el']) / main_edz['height']
             rhp_pre = tmp_rh_prime[:main_edz['start_ind']].mean()
