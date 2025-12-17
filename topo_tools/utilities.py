@@ -268,7 +268,7 @@ def add_bathymetry(geom, da, slope):
     filter_arg = max(filter_arg, 2)  # need at least two 
     top_width = geom['area'][filter_arg]
     #  Use regression of Read et al 2023. https://onlinelibrary.wiley.com/doi/full/10.1111/1752-1688.13134
-    bottom_width = min(top_width, 0.5 * ((13.0 * 0.3048) * ((da * 0.386102) ** 0.448)))  # Underwood et al. (2021) VT regression, conversions for sq km -> sq mi, then ft -> m # min(top_width, (2.44 * (da ** 0.34)))  # try to use NWM channel top-width, unless it would lead to decreasing top-width
+    bottom_width = min(top_width, ((13.0 * 0.3048) * ((da * 0.386102) ** 0.448)))  # Underwood et al. (2021) VT regression, conversions for sq km -> sq mi, then ft -> m # min(top_width, (2.44 * (da ** 0.34)))  # try to use NWM channel top-width, unless it would lead to decreasing top-width
     flowrate = (0.4962 * da) / 35.3147  # Diehl Estimate
     n = 0.01
     max_space = 2 * ((0.907 * 0.3048) * ((da * 0.386102) ** 0.331))  # (0.26 * (da ** 0.287))  # Cap at 2xbkfl
@@ -294,7 +294,6 @@ def add_bathymetry(geom, da, slope):
     perimeter = perimeter[:channel_ind]
     area_diff = geom['area'][filter_arg] - top_width
 
-    print(f'Scaled top of imputed channel at {stage_space[-1] / (0.5 * max_space)}')
     geom['area'] = geom['area'][filter_arg:]
     geom['area'] = np.insert(geom['area'], 0, width)
     geom['area'] = geom['area'][:dim]

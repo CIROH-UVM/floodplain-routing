@@ -157,7 +157,6 @@ def batch_add_bathymetry(meta_path):
                 out_dfs[i] = out_dfs[i].copy()
             continue
 
-        print(reach)
         tmp_geom = add_bathymetry(tmp_geom, da, slope)
 
         tmp_geom['area'] = tmp_geom['area'] * length
