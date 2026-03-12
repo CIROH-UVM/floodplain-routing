@@ -27,7 +27,7 @@ def extract_geometry(meta_path):
     # Load reaches/basins to run
     reach_path = os.path.join(run_dict['run_directory'], 'network', 'catchments.shp')
     reach_data_path = os.path.join(run_dict['run_directory'], 'network', 'reach_data.csv')
-    reaches = pd.read_csv(reach_data_path, dtype={'12_code': str, run_dict['id_field']: int})
+    reaches = pd.read_csv(reach_data_path, dtype={run_dict['subunit_field']: str, run_dict['id_field']: int})
     reaches[run_dict['id_field']] = reaches[run_dict['id_field']].astype(str)
     units = reaches[run_dict['unit_field']].unique()
 
