@@ -188,7 +188,11 @@ def scale_stages(reach_data, el_data):
     reach_data = pd.merge(reach_data, reaches, right_on='ReachCode', left_index=True, how='right')
     max_stages = bkf_equation(reach_data['TotDASqKm'].to_numpy())
     el_scaled_data.iloc[:, :] = (el_data.values / max_stages)
-    el_scaled_data.iloc[:, 0] = el_data.iloc[:, 0]
+    
+    # why is the following line present? I think it is a bug because of the way these arrays are shaped, i.e., with record ID's as columns and rows n=number of depth discritization nodes
+    # it equates to resetting all of the scaled depths to the original depths for the first record in the input data
+    # if the intention was to set the lowest discretization node for each record back to the bottom elevation, but this only makes sense if the bottom elevation equals zero, in which case it is handled by the previous line
+    # el_scaled_data.iloc[:, 0] = el_data.iloc[:, 0]
     return el_scaled_data
 
 if __name__ == '__main__':
