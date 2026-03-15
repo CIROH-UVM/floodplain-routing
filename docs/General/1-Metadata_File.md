@@ -28,6 +28,9 @@ Here are more details on those options
  - <b>subunit_path:</b> This is the path to a shapefile containing subunit boundaries.  Information from this file is intersected with NHDPlus data in refactor_nhd.py to determine subunit membership of reaches.
  - <b>geometry_source:</b> The geometry extraction steps may be run on HAND rasters ("HAND") or DEM rasters ("DEM").  When using the DEM option, reaches must be short enough such that the thalweg elevation change across the reach is negligible.
 
+Optional configuration file options:
+ - <b>plottitle_field:</b> If provided, entries from this field will be pulled for the diagnostic plot title of each reach. If not provided, the reach's value from the <i>id_field</i> will be used in the title.
+
  ## Generating run_metadata.json
 
  If you want to make a boilerplate configuration file, you can run the following command in your system's shell

@@ -26,11 +26,15 @@ parser.add_argument('-subset', type=list, help='List of reaches to analyze (opti
 
 class ReachPlot:
 
-    def __init__(self, out_dir, reach, da, slope) -> None:
+    def __init__(self, out_dir, reach, da, slope, plot_title=None) -> None:
         os.makedirs(out_dir, exist_ok=True)
         self.reach = reach
         self.da = da
         self.slope = slope
+        if plot_title is None:
+            plot_title = reach
+        self.plot_title = plot_title
+            
         self.out_path = os.path.join(out_dir, f'{reach}.png')
         self.fig, (self.section_ax, self.rh_ax, self.rhp_ax) = plt.subplots(ncols=3, figsize=(10, 3), sharey=True)
         self.all_ax = (self.section_ax, self.rh_ax, self.rhp_ax)
@@ -109,7 +113,7 @@ class ReachPlot:
             self.rhp_ax.set(xlim=(-1, 1), ylim=(0, 6))
 
         # Export
-        self.fig.suptitle(f'{self.reach} | {round(self.da, 1)} sqkm | {self.slope} m/m')
+        self.fig.suptitle(f'{self.plot_title} | {round(self.da, 1)} sqkm | {self.slope} m/m')
         self.fig.tight_layout()
         self.fig.savefig(self.out_path, dpi=dpi)
         plt.close()
@@ -302,6 +306,11 @@ def extract_features(run_path, plot=False, subset=None):
     reach_data[run_dict['id_field']] = reach_data[run_dict['id_field']].astype(np.int64).astype(str)
     reach_data = reach_data.set_index(run_dict['id_field'])
 
+    try:
+        plot_titles = reach_data[run_dict['plottitle_field']]
+    except KeyError:
+        plot_titles = None
+
     el_data = pd.read_csv(el_path)
     el_data = el_data.dropna(axis=1)
 
@@ -361,7 +370,10 @@ def extract_features(run_path, plot=False, subset=None):
             da = tmp_meta['TotDASqKm']
             diagnostics_path = os.path.join(run_dict['run_directory'], 'geometry', 'diagnostics')
             os.makedirs(diagnostics_path, exist_ok=True)
-            reach_plot = ReachPlot(diagnostics_path, reach, da, slope)
+            plot_title = None
+            if plot_titles:
+                plot_title = plot_titles[reach]
+            reach_plot = ReachPlot(diagnostics_path, reach, da, slope, plot_title=plot_title)
 
         # Error handling
         if np.all(tmp_area < 1):
