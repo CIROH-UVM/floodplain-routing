@@ -29,7 +29,7 @@ Here are more details on those options
  - <b>geometry_source:</b> The geometry extraction steps may be run on HAND rasters ("HAND") or DEM rasters ("DEM").  When using the DEM option, reaches must be short enough such that the thalweg elevation change across the reach is negligible.
 
 Optional configuration file options:
- - <b>plottitle_field:</b> If provided, entries from this field will be pulled for the diagnostic plot title of each reach. If not provided, the reach's value from the <i>id_field</i> will be used in the title.
+ - <b>plottitle_field:</b> If provided, entries from this field will be pulled for the diagnostic plot title of each reach. If not provided (or if an invalid field key is provided), the reach's value from the <i>id_field</i> will be used in the title.
 
  ## Generating run_metadata.json
 

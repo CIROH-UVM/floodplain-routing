@@ -308,7 +308,7 @@ def extract_features(run_path, plot=False, subset=None):
 
     try:
         plot_titles = reach_data[run_dict['plottitle_field']]
-    except KeyError:
+    except:
         plot_titles = None
 
     el_data = pd.read_csv(el_path)
@@ -371,7 +371,7 @@ def extract_features(run_path, plot=False, subset=None):
             diagnostics_path = os.path.join(run_dict['run_directory'], 'geometry', 'diagnostics')
             os.makedirs(diagnostics_path, exist_ok=True)
             plot_title = None
-            if plot_titles:
+            if plot_titles is not None:
                 plot_title = plot_titles[reach]
             reach_plot = ReachPlot(diagnostics_path, reach, da, slope, plot_title=plot_title)
 
