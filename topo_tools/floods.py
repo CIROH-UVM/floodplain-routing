@@ -91,26 +91,26 @@ class Reach:
             n_channel_mod = ((self.ch_n * self.ch_ps) + (self.fp_n * self.fp_ps)) / (self.ch_ps + self.fp_ps)
             radius_channel_mod = (self.ch_areas + self.fp_areas) / (self.ch_ps + self.fp_ps)
             q_channel = (1 / n_channel_mod) * (slope ** 0.5) * (radius_channel_mod ** (2/3)) * (self.ch_areas + self.fp_areas)
-            q_channel = np.nan_to_num(q_channel, 0)
+            q_channel = np.nan_to_num(q_channel, nan=0)
             q_edz = (1 / self.edz_n) * (slope ** 0.5) * (self.edz_radius ** (2/3)) * (self.edz_areas)
-            q_edz = np.nan_to_num(q_edz, 0)
+            q_edz = np.nan_to_num(q_edz, nan=0)
             self.discharge = q_channel + q_edz
         elif q_method == '3-channel':
             q_channel = (1 / self.ch_n) * (slope ** 0.5) * (self.ch_radius ** (2/3)) * (self.ch_areas)
-            q_channel = np.nan_to_num(q_channel, 0)
+            q_channel = np.nan_to_num(q_channel, nan=0)
             q_edz = (1 / self.edz_n) * (slope ** 0.5) * (self.edz_radius ** (2/3)) * (self.edz_areas)
-            q_edz = np.nan_to_num(q_edz, 0)
+            q_edz = np.nan_to_num(q_edz, nan=0)
             q_fp = (1 / self.fp_n) * (slope ** 0.5) * (self.fp_radius ** (2/3)) * (self.fp_areas)
-            q_fp = np.nan_to_num(q_fp, 0)
+            q_fp = np.nan_to_num(q_fp, nan=0)
             self.discharge = q_channel + q_edz + q_fp
         
-        self.discharge = np.nan_to_num(self.discharge, 0, posinf=0)
+        self.discharge = np.nan_to_num(self.discharge, nan=0, posinf=0)
         increasing = self.discharge[1:] > np.maximum.accumulate(self.discharge)[:-1]
         increasing = np.insert(increasing, 0, True)
         for param in ['el', 'tw', 'area', 'p', 'radius', 'mannings', 'weighted_mannings', 'ch_widths', 'edz_widths', 'fp_widths', 'ch_ps', 'edz_ps', 'fp_ps', 'ch_areas', 'edz_areas', 'fp_areas', 'ch_radius', 'edz_radius', 'fp_radius', 'ch_n', 'edz_n', 'fp_n', 'discharge']:
             setattr(self, param, getattr(self, param)[increasing])
         self.velocity = self.discharge / self.area
-        self.velocity = np.nan_to_num(self.velocity, 0, posinf=0)
+        self.velocity = np.nan_to_num(self.velocity, nan=0, posinf=0)
     
     def analyze_hydrograph(self, q_vals, dt):
         if q_vals.max() > self.discharge.max():
@@ -131,11 +131,11 @@ class Reach:
         volume_conservation = 1 - (np.abs(event_volume - event_vol_check) / event_vol_check)
 
         event_ssp_ch = (9810 * self.slope * (self.velocity * self.ch_area)) / self.ch_widths
-        event_ssp_ch = np.sum(np.nan_to_num(event_ssp_ch, 0, posinf=0, neginf=0))
+        event_ssp_ch = np.sum(np.nan_to_num(event_ssp_ch, nan=0, posinf=0, neginf=0))
         event_ssp_edz = (9810 * self.slope * (self.velocity * self.edz_area)) / self.edz_widths
-        event_ssp_edz = np.sum(np.nan_to_num(event_ssp_edz, 0, posinf=0, neginf=0))
+        event_ssp_edz = np.sum(np.nan_to_num(event_ssp_edz, nan=0, posinf=0, neginf=0))
         event_ssp_fp = (9810 * self.slope * (self.velocity * self.fp_areas)) / self.fp_widths
-        event_ssp_fp = np.sum(np.nan_to_num(event_ssp_fp, 0, posinf=0, neginf=0))
+        event_ssp_fp = np.sum(np.nan_to_num(event_ssp_fp, nan=0, posinf=0, neginf=0))
         event_ssp = event_ssp_ch + event_ssp_edz + event_ssp_fp
 
         tw_ch = np.interp(q_vals.max(), self.discharge, self.ch_widths)
