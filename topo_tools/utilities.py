@@ -262,7 +262,6 @@ def extract_topographic_signature(hand_path, aoi_path, slope_path, reaches=None,
         plt.close(fig)
 
 def add_bathymetry(geom, da, slope):
-    geom = geom.copy()
     dim = geom['el'].shape[0]
     # 0.015 meters is a reasonable threshold to extract the lidar-based wetted top-width.  Sensitivity analysis by UVM Fall 2023
     filter_arg = np.argmin(geom['el'] < 0.015)
@@ -299,21 +298,21 @@ def add_bathymetry(geom, da, slope):
     geom['area'] = np.insert(geom['area'], 0, width)
     geom['area'] = geom['area'][:dim]
 
-    geom['el'] -= geom['el'][filter_arg - 1]  # first data point should be at top of bathymetry
+    geom['el'] = geom['el'] - geom['el'][filter_arg - 1]  # first data point should be at top of bathymetry
     geom['el'] = geom['el'][filter_arg:]
-    geom['el'] += stage_space[-1]
+    geom['el'] = geom['el'] + stage_space[-1]
     geom['el'] = np.insert(geom['el'], 0, stage_space)
     geom['el'] = geom['el'][:dim]
 
-    geom['vol'] -= geom['vol'][filter_arg - 1]
+    geom['vol'] = geom['vol'] - geom['vol'][filter_arg - 1]
     geom['vol'] = geom['vol'][filter_arg:]
-    geom['vol'] += area[-1]
+    geom['vol'] = geom['vol'] + area[-1]
     geom['vol'] = np.insert(geom['vol'], 0, area)
     geom['vol'] = geom['vol'][:dim]
 
-    geom['p'] -= geom['p'][filter_arg - 1]
+    geom['p'] = geom['p'] - geom['p'][filter_arg - 1]
     geom['p'] = geom['p'][filter_arg:]
-    geom['p'] += perimeter[-1] + area_diff
+    geom['p'] = geom['p'] + perimeter[-1] + area_diff
     geom['p'] = np.insert(geom['p'], 0, perimeter)
     geom['p'] = geom['p'][:dim]
 
