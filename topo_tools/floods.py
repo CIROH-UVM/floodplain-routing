@@ -75,11 +75,11 @@ class Reach:
         self.fp_areas = area.values - (self.ch_areas + self.edz_areas)
 
         self.ch_radius = self.ch_areas / self.ch_ps
-        self.ch_radius = np.abs(np.nan_to_num(self.ch_radius, 0, posinf=0, neginf=0))
+        self.ch_radius = np.abs(np.nan_to_num(self.ch_radius, nan=0, posinf=0, neginf=0))
         self.edz_radius = self.edz_areas / self.edz_ps
-        self.edz_radius = np.abs(np.nan_to_num(self.edz_radius, 0, posinf=0, neginf=0))
+        self.edz_radius = np.abs(np.nan_to_num(self.edz_radius, nan=0, posinf=0, neginf=0))
         self.fp_radius = self.fp_areas / self.fp_ps
-        self.fp_radius = np.abs(np.nan_to_num(self.fp_radius, 0, posinf=0, neginf=0))
+        self.fp_radius = np.abs(np.nan_to_num(self.fp_radius, nan=0, posinf=0, neginf=0))
 
         self.ch_n = np.cumsum(mannings * self.ch_ps) / np.cumsum(self.ch_ps)
         self.edz_n = np.cumsum(mannings * self.edz_ps) / np.cumsum(self.edz_ps)
