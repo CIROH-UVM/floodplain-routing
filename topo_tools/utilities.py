@@ -262,6 +262,7 @@ def extract_topographic_signature(hand_path, aoi_path, slope_path, reaches=None,
         plt.close(fig)
 
 def add_bathymetry(geom, da, slope):
+    geom = geom.copy()
     dim = geom['el'].shape[0]
     # 0.015 meters is a reasonable threshold to extract the lidar-based wetted top-width.  Sensitivity analysis by UVM Fall 2023
     filter_arg = np.argmin(geom['el'] < 0.015)
