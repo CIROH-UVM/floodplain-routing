@@ -347,18 +347,6 @@ def extract_features(run_path, plot=False, subset=None):
         counter += 1
         # Subset data
         tmp_meta = reach_data.loc[reach]
-        try:
-            tmp_el = el_data[reach].to_numpy()
-            tmp_el_scaled = el_scaled_data[reach].to_numpy()
-            tmp_rh = rh_data[reach].to_numpy()
-            tmp_rh_prime = rh_prime_data[reach].to_numpy()
-            tmp_area = area_data[reach].to_numpy() / tmp_meta['length']
-            tmp_volume = volume_data[reach].to_numpy() / tmp_meta['length']
-        except KeyError:
-            if plot:
-                reach_plot.no_geometry()
-            features.loc[reach, 'invalid_geometry'] = 1
-            continue
 
         features.loc[reach, 'length'] = tmp_meta['length']
         features.loc[reach, 'slope'] = tmp_meta['slope']
@@ -374,6 +362,19 @@ def extract_features(run_path, plot=False, subset=None):
             if plot_titles is not None:
                 plot_title = plot_titles[reach]
             reach_plot = ReachPlot(diagnostics_path, reach, da, slope, plot_title=plot_title)
+
+        try:
+            tmp_el = el_data[reach].to_numpy()
+            tmp_el_scaled = el_scaled_data[reach].to_numpy()
+            tmp_rh = rh_data[reach].to_numpy()
+            tmp_rh_prime = rh_prime_data[reach].to_numpy()
+            tmp_area = area_data[reach].to_numpy() / tmp_meta['length']
+            tmp_volume = volume_data[reach].to_numpy() / tmp_meta['length']
+        except KeyError:
+            if plot:
+                reach_plot.no_geometry()
+            features.loc[reach, 'invalid_geometry'] = 1
+            continue
 
         # Error handling
         if np.all(tmp_area < 1):
