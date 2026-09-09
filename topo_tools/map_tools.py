@@ -21,7 +21,7 @@ def map_edzs(meta_path):
 
     # Load reaches/basins to run
     meta_path = os.path.join(run_dict['run_directory'], 'network', 'reach_data.csv')
-    reaches = pd.read_csv(meta_path)
+    reaches = pd.read_csv(meta_path, dtype={run_dict['subunit_field']: str, run_dict['id_field']: int})
     reaches[run_dict['id_field']] = reaches[run_dict['id_field']].astype(str)
     # reaches[run_dict['subunit_field']] = reaches[run_dict['subunit_field']].astype(str).str.rjust(4, '0')
     reaches = reaches.set_index(run_dict['id_field'])
